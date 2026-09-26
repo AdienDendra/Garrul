@@ -41,13 +41,30 @@ describe("matchLocale", () => {
 	});
 
 	it("routes Traditional Chinese script and region tags to zh-Hant", () => {
-		for (const tag of ["zh-Hant", "zh-Hant-TW", "zh-TW", "zh-HK", "zh-MO"]) {
+		for (const tag of [
+			"zh-Hant",
+			"zh-Hant-TW",
+			"zh-TW",
+			"zh-HK",
+			"zh-MO",
+			"zh-TW-u-ca-chinese",
+			"zh-TW-x-private",
+		]) {
 			expect(matchLocale(tag), tag).toBe("zh-Hant");
 		}
 	});
 
 	it("does not guess a Chinese script from ambiguous or Simplified tags", () => {
-		for (const tag of ["zh", "zh-CN", "zh-SG", "zh-Hans", "zh-Hans-CN"]) {
+		for (const tag of [
+			"zh",
+			"zh-CN",
+			"zh-SG",
+			"zh-Hans",
+			"zh-Hans-CN",
+			"zh-Hans-TW",
+			"zh-CN-x-hk",
+			"zh-x-tw",
+		]) {
 			expect(matchLocale(tag), tag).toBeUndefined();
 		}
 	});

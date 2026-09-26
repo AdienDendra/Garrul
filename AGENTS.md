@@ -360,9 +360,11 @@ Shipped tags: `en` (source) plus `de`, `es`, `fr`, `it`, `ja`, `nb`, `nl`,
 auto-selectable from `<html lang>`; the other eight are machine-seeded and
 opt-in per the paragraph above. `pt` is the bare primary subtag and serves
 `pt-BR` and `pt-PT` alike; there is no `pt-BR` entry to match. `zh-Hant`
-serves explicit Traditional Chinese script tags and the `zh-TW`, `zh-HK` and
-`zh-MO` regions; ambiguous `zh` and Simplified region tags fall back to
-English. Its API error messages stay English. `nb` is Bokmål, and the
+serves the explicit Traditional Chinese script and the `zh-TW`, `zh-HK` and
+`zh-MO` regions when no script is given; explicit other scripts win over the
+region, and BCP 47 extension subtags are ignored. Ambiguous `zh` and
+Simplified tags fall back to English. Its API error messages stay English.
+`nb` is Bokmål, and the
 macrolanguage tag `no` is aliased onto it, so `no`, `no-NO` and `nb-NO` all
 match. The current list with endonyms is `docs/i18n.md`.
 

@@ -59,6 +59,20 @@ describe("migration 0025 — comments.pinned_at", () => {
 	});
 });
 
+describe("getPinnedThreadRef", () => {
+	it("looks the pin up through comments_pinned_idx", () => {
+		const plan = sqlite
+			.prepare(
+				`EXPLAIN QUERY PLAN SELECT id, (score_up - score_down) AS score, created_at
+				   FROM comments
+				  WHERE post_slug = ? AND pinned_at IS NOT NULL
+				    AND parent_id IS NULL AND +status = 'approved'`,
+			)
+			.all("p") as { detail: string }[];
+		expect(plan.map((r) => r.detail).join("\n")).toMatch(/comments_pinned_idx/);
+	});
+});
+
 describe("setCommentPin", () => {
 	it("swaps the post's pin in one batch, clearing the old one first", async () => {
 		await setCommentPin(db, { id: "a", post_slug: "p" }, true);

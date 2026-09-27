@@ -773,7 +773,10 @@ export const getThreadCreatedAt = async (
  * pinned_at, so a spammed or deleted pin goes dormant here and pages normally
  * in listThreadRefsForPost.
  *
- * `.first()`, not `.all()` plus LIMIT: one row by construction.
+ * `.first()`, not `.all()` plus LIMIT: one row by construction. The unary
+ * `+` on status keeps it out of index selection, so SQLite uses
+ * comments_pinned_idx instead of scanning every approved row via
+ * comments_score_idx.
  */
 export const getPinnedThreadRef = async (
 	db: D1Database,
@@ -784,7 +787,7 @@ export const getPinnedThreadRef = async (
 			`SELECT id, (score_up - score_down) AS score, created_at
 			   FROM comments
 			  WHERE post_slug = ? AND pinned_at IS NOT NULL
-			    AND parent_id IS NULL AND status = 'approved'`,
+			    AND parent_id IS NULL AND +status = 'approved'`,
 		)
 		.bind(post_slug)
 		.first<ThreadRef>();

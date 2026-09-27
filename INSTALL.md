@@ -258,8 +258,8 @@ Setup runs this health check for you. To repeat it (substitute your
 `*.workers.dev` URL if you haven't set up a custom domain):
 
 ```bash
-curl -fsSL https://comments.example.com/api/v1/health
-# → {"ok":true,...}
+curl -fsS https://comments.example.com/api/v1/health
+# → {"status":"ok","service":"garrul",...}
 ```
 
 Tail logs while you exercise it:

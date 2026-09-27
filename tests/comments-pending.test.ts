@@ -47,6 +47,7 @@ type Row = {
 	created_at: number;
 	score_up: number;
 	score_down: number;
+	as_staff?: number;
 };
 
 const mkRow = (id: string, user_id: string, status: string, at: number): Row => ({
@@ -188,6 +189,7 @@ type ListResp = {
 	threads: {
 		id: string;
 		status: string;
+		staff?: boolean;
 		author: Record<string, unknown>;
 	}[];
 };
@@ -246,5 +248,24 @@ describe("GET /comments — the payload withholds author privilege flags", () =>
 		expect(node.author).not.toHaveProperty("is_admin");
 		expect(node.author).not.toHaveProperty("role");
 		expect(JSON.stringify(page)).not.toContain("is_admin");
+	});
+
+	// The one sanctioned role signal: a comment its staff author chose to mark.
+	// It rides on the comment, never on the author, and only when set.
+	it("marks an opted-in comment staff: true and still withholds role", async () => {
+		const approved = [
+			{ ...mkRow("01HUSTAFF0000000000000", ADMIN, "approved", 1000), as_staff: 1 },
+			mkRow("01HUPLAIN0000000000000", ADMIN, "approved", 2000),
+		];
+		const page = await get(mkEnv(approved, []));
+		const staff = page.threads.find((t) => t.id === "01HUSTAFF0000000000000")!;
+		const plain = page.threads.find((t) => t.id === "01HUPLAIN0000000000000")!;
+		expect(staff.staff).toBe(true);
+		expect(plain).not.toHaveProperty("staff");
+		expect(staff.author).not.toHaveProperty("role");
+		expect(staff.author).not.toHaveProperty("is_admin");
+		const json = JSON.stringify(page);
+		expect(json).not.toContain("is_admin");
+		expect(json).not.toContain('"role"');
 	});
 });

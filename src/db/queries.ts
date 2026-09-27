@@ -108,6 +108,9 @@ export type Comment = {
 	/** Epoch ms this top-level comment was pinned; NULL when not pinned. At
 	 *  most one per post (migration 0025's partial UNIQUE index). */
 	pinned_at: number | null;
+	/** 1 when the author posted this comment as staff (migration 0026). Set
+	 *  only on insert, role-gated; cleared by setUserRole on demotion. */
+	as_staff: number;
 };
 
 /**
@@ -123,7 +126,7 @@ export type TreeComment = Omit<Comment, "body_md" | "ip_hash" | "user_agent">;
 /** Column list backing `TreeComment`. Keep the two in sync. */
 const TREE_COLUMNS = `id, post_slug, parent_id, user_id, body_html,
 	        renderer_version, status, edited_at, deleted_at, deleted_by,
-	        created_at, depth, score_up, score_down, pinned_at`;
+	        created_at, depth, score_up, score_down, pinned_at, as_staff`;
 
 // Every users SELECT that feeds `toUser` goes through this list. It used to be
 // spelled out at six call sites, which meant a new column silently arrived as
@@ -498,6 +501,7 @@ type InsertCommentInput = {
 	 *  validate it, and a silent default would let an unbounded reply chain
 	 *  through the MAX_REPLY_DEPTH check that reads this column. */
 	depth: number;
+	as_staff?: boolean;
 };
 
 export const insertComment = async (
@@ -512,8 +516,8 @@ export const insertComment = async (
 			`INSERT INTO comments (
 			   id, post_slug, parent_id, user_id, body_md, body_html,
 			   renderer_version, status, edited_at, deleted_at, deleted_by,
-			   ip_hash, user_agent, created_at, depth)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?)`,
+			   ip_hash, user_agent, created_at, depth, as_staff)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?)`,
 		)
 		.bind(
 			id,
@@ -528,6 +532,7 @@ export const insertComment = async (
 			input.user_agent,
 			now,
 			input.depth,
+			input.as_staff ? 1 : 0,
 		)
 		.run();
 	return {
@@ -549,6 +554,7 @@ export const insertComment = async (
 		score_up: 0,
 		score_down: 0,
 		pinned_at: null,
+		as_staff: input.as_staff ? 1 : 0,
 	};
 };
 
@@ -560,7 +566,7 @@ export const getComment = async (
 		.prepare(
 			`SELECT id, post_slug, parent_id, user_id, body_md, body_html,
 			        renderer_version, status, edited_at, deleted_at, deleted_by,
-			        ip_hash, user_agent, created_at, depth, score_up, score_down, pinned_at
+			        ip_hash, user_agent, created_at, depth, score_up, score_down, pinned_at, as_staff
 			 FROM comments WHERE id = ?`,
 		)
 		.bind(id)
@@ -581,7 +587,7 @@ export const getCommentsByIds = async (
 		.prepare(
 			`SELECT id, post_slug, parent_id, user_id, body_md, body_html,
 			        renderer_version, status, edited_at, deleted_at, deleted_by,
-			        ip_hash, user_agent, created_at, depth, score_up, score_down, pinned_at
+			        ip_hash, user_agent, created_at, depth, score_up, score_down, pinned_at, as_staff
 			   FROM comments WHERE id IN (${placeholders})`,
 		)
 		.bind(...ids)
@@ -895,7 +901,7 @@ export const listLatestApprovedComments = async (
 		.prepare(
 			`SELECT c.id, c.post_slug, c.parent_id, c.user_id, c.body_md, c.body_html,
 			        c.renderer_version, c.status, c.edited_at, c.deleted_at, c.deleted_by,
-			        c.ip_hash, c.user_agent, c.created_at, c.depth, c.score_up, c.score_down, c.pinned_at,
+			        c.ip_hash, c.user_agent, c.created_at, c.depth, c.score_up, c.score_down, c.pinned_at, c.as_staff,
 			        u.name AS author_name
 			   FROM comments c
 			   JOIN users u ON u.id = c.user_id
@@ -1465,7 +1471,7 @@ export const adminListComments = async (
 	const sql = `
 		SELECT c.id, c.post_slug, c.parent_id, c.user_id, c.body_md, c.body_html,
 		       c.renderer_version, c.status, c.edited_at, c.deleted_at, c.deleted_by,
-		       c.ip_hash, c.user_agent, c.created_at, c.depth, c.score_up, c.score_down, c.pinned_at,
+		       c.ip_hash, c.user_agent, c.created_at, c.depth, c.score_up, c.score_down, c.pinned_at, c.as_staff,
 		       u.name       AS author_name,
 		       u.email      AS author_email,
 		       u.avatar_url AS author_avatar_url,
@@ -1579,10 +1585,23 @@ export const setUserRole = async (
 	role: UserRole,
 ): Promise<void> => {
 	const is_admin = role === "admin" ? 1 : 0;
-	await db
+	const setRole = db
 		.prepare(`UPDATE users SET role = ?, is_admin = ? WHERE id = ?`)
-		.bind(role, is_admin, id)
-		.run();
+		.bind(role, is_admin, id);
+	if (role !== "user") {
+		await setRole.run();
+		return;
+	}
+	// A demoted account's staff marks would otherwise keep claiming a role it
+	// no longer holds. Same batch so the two can't disagree. Cached tree pages
+	// age out on their 60 s TTL: which posts this user touched isn't tracked
+	// here, and a per-post bust for a rare admin action isn't worth a query.
+	await db.batch([
+		setRole,
+		db
+			.prepare(`UPDATE comments SET as_staff = 0 WHERE user_id = ? AND as_staff = 1`)
+			.bind(id),
+	]);
 };
 
 /** What an erasure touched. Counts only — never the values removed. */
@@ -3158,7 +3177,7 @@ export const adminGetCommentDetail = async (
 		.prepare(
 			`SELECT c.id, c.post_slug, c.parent_id, c.user_id, c.body_md, c.body_html,
 			        c.renderer_version, c.status, c.edited_at, c.deleted_at, c.deleted_by,
-			        c.ip_hash, c.user_agent, c.created_at, c.depth, c.pinned_at,
+			        c.ip_hash, c.user_agent, c.created_at, c.depth, c.pinned_at, c.as_staff,
 			        u.name       AS author_name,
 			        u.email      AS author_email,
 			        u.avatar_url AS author_avatar_url,

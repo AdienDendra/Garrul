@@ -32,6 +32,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { Hono } from "hono";
 import { beforeEach, describe, expect, it } from "vitest";
+import { replyComposer } from "../src/admin-ui/components/reply-composer";
 import { ADMIN_ACTIONS, insertComment } from "../src/db/queries";
 import type { Bindings } from "../src/index";
 import { CURRENT_RENDERER_VERSION, MAX_BODY_CHARS } from "../src/lib/markdown";
@@ -643,5 +644,34 @@ describe("ADMIN_ACTIONS", () => {
 		expect(ADMIN_ACTIONS).toContain("import.comentario");
 		expect(ADMIN_ACTIONS).toContain("import.isso");
 		expect(ADMIN_ACTIONS).toContain("import.cusdis");
+	});
+});
+
+describe("POST /admin/api/comments/:id/reply — as_staff", () => {
+	it("marks the reply as staff by default", async () => {
+		const id = await replyId(await seedComment(), { body_md: "hi" });
+		expect(commentRow(id).as_staff).toBe(1);
+	});
+
+	it("honours an explicit opt-out", async () => {
+		const id = await replyId(await seedComment(), { body_md: "hi", as_staff: false });
+		expect(commentRow(id).as_staff).toBe(0);
+	});
+
+	it("rejects a non-boolean as_staff instead of coercing it", async () => {
+		const target = await seedComment();
+		for (const as_staff of ["false", 0, {}]) {
+			const res = await reply(target, { body_md: "hi", as_staff });
+			expect(res.status).toBe(400);
+			expect(await res.json()).toEqual({ error: "invalid_body" });
+		}
+		expect(replies()).toHaveLength(0);
+	});
+
+	it("composer starts with the staff box checked and sends it", () => {
+		const html = replyComposer({ commentIdExpr: "'c1'", modName: "Mod" });
+		expect(html).toContain("asStaff: true");
+		expect(html).toContain('x-model="asStaff"');
+		expect(html).toContain("as_staff: this.asStaff");
 	});
 });

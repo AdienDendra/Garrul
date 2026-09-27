@@ -1729,6 +1729,7 @@ admin.post("/api/comments/:id/reply", async (c) => {
 			body_md?: unknown;
 			saved_reply_id?: unknown;
 			notify?: unknown;
+			as_staff?: unknown;
 		}>()
 		.catch(() => null);
 	if (!body) return c.json({ error: "invalid_body" }, 400);
@@ -1750,6 +1751,11 @@ admin.post("/api/comments/:id/reply", async (c) => {
 	// mails the whole thread. Absent stays absent; anything present must be a
 	// real boolean.
 	if (body.notify != null && typeof body.notify !== "boolean") {
+		return c.json({ error: "invalid_body" }, 400);
+	}
+	// Same rule as `notify`: optional, never coerced. Defaults on — a reply from
+	// the moderation panel is the staff voice unless the mod says otherwise.
+	if (body.as_staff != null && typeof body.as_staff !== "boolean") {
 		return c.json({ error: "invalid_body" }, 400);
 	}
 
@@ -1792,6 +1798,7 @@ admin.post("/api/comments/:id/reply", async (c) => {
 		ip_hash: null,
 		user_agent: null,
 		depth,
+		as_staff: body.as_staff ?? true,
 	});
 
 	// Default on: this is a real comment on a real thread, so the people

@@ -926,6 +926,7 @@ tracked by the `_migrations` table. Current set:
 - `0022_reaction_kind_fire.sql` — renames the `like` reaction to `fire`
 - `0023_moderator_notes.sql` — `moderator_notes`, internal moderator context on one comment or one account. Never rendered to readers, and the note *body* never reaches `audit_log`
 - `0024_subscriptions_token_index.sql` — `subscriptions(token)`; the unsubscribe-link lookup was a full table scan on two endpoints that take no session and no rate limit, so a loop of random tokens read the whole table per request
+- `0026_staff_badge.sql` — `comments.as_staff`, the per-comment opt-in staff marker
 
 Run with `npm run migrate` (local Miniflare) or
 `npm run migrate -- --remote` (production D1). Idempotent. Never edit a
@@ -1002,7 +1003,7 @@ responding):
 - `POST /admin/api/comments/:id` — `{action: approve|spam|delete|restore, reason?}`, or `{action: pin|unpin}` (approved top-level only, else 400 `not_pinnable`; one pin per post, pinning moves it; audited `comment.pin` / `comment.unpin`; spam/delete drops the pin)
 - `POST /admin/api/comments/bulk` — `{ids: string[], action}` (cap 100)
 - `POST /admin/api/comments/:id/reports/resolve` — clears open reader reports on a comment (audited `report.resolve`)
-- `POST /admin/api/comments/:id/reply` — `{body_md, saved_reply_id?, notify?}` posts a moderator reply nested under `:id` (audited `comment.reply`; `notify` must be a real boolean when present, defaults to true, and fans out to the post's confirmed subscribers; `saved_reply_id` is audit provenance only and must be a preset this mod can see)
+- `POST /admin/api/comments/:id/reply` — `{body_md, saved_reply_id?, notify?, as_staff?}` posts a moderator reply nested under `:id` (audited `comment.reply`; `notify` must be a real boolean when present, defaults to true, and fans out to the post's confirmed subscribers; `saved_reply_id` is audit provenance only and must be a preset this mod can see; `as_staff` must be a real boolean when present and defaults to true (the reply shows the staff badge))
 - `POST /admin/api/notes` — `{target_kind: comment|user, target_id, body}` writes an internal moderator note (mod or admin; audited `note.create` against the **target**, with only the note id in `meta`). Body caps at 4 000 characters; a target that does not exist is `404 target_not_found`.
 - `DELETE /admin/api/notes/:id` — removes one note (audited `note.delete`, again against the target, with `meta.own` recording whether the caller wrote it). Author **or** admin, deliberately looser than saved replies' owner-only rule; another mod gets `403 not_author`.
 - `POST /admin/api/posts/close` — `{slug, closed: boolean}` (per-post close/open; audited `post.close` / `post.open`; busts the cached first page)

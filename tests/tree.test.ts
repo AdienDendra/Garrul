@@ -59,6 +59,7 @@ const mk = (
 	score_up: 0,
 	score_down: 0,
 	pinned_at: null,
+	as_staff: 0,
 });
 
 /** Chain of `n` comments, each a reply to the previous. Stored depth ascends
@@ -364,5 +365,26 @@ describe("buildTree — keepAllDeleted (show_deleted_placeholders)", () => {
 		const byId = new Map(threads[0]!.replies.map((r) => [r.id, r]));
 		expect(byId.get("byMod")!.deleted_by).toBe("moderator");
 		expect(byId.get("byAuthor")!.deleted_by).toBe("author");
+	});
+});
+
+describe("buildTree — staff flag", () => {
+	it("marks only an opted-in comment, and never on the author", () => {
+		const { threads } = buildTree(
+			[{ ...mk("s", null, 100), as_staff: 1 }, mk("p", null, 200)],
+			usersById(author("u1")),
+		);
+		expect(threads[0]!.staff).toBe(true);
+		expect(threads[0]!.author).not.toHaveProperty("role");
+		expect(threads[1]).not.toHaveProperty("staff");
+	});
+
+	it("drops the badge from a tombstone kept for its live reply", () => {
+		const { threads } = buildTree(
+			[{ ...mk("s", null, 100, "u1", "deleted"), as_staff: 1 }, mk("r", "s", 200)],
+			usersById(author("u1")),
+		);
+		expect(threads[0]!.status).toBe("deleted");
+		expect(threads[0]).not.toHaveProperty("staff");
 	});
 });

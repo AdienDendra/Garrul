@@ -785,6 +785,16 @@ see AGENTS-OPERATE.md §5) control the volume:
   unaffected. A pinned comment that is hidden stops being served as the pin
   and pages normally; re-approving it restores the pin.
 
+- **Staff badge (opt-in per comment).** `POST /api/v1/comments` accepts
+  `as_staff: true` only from a `mod`/`admin` session; anyone else gets
+  `403 {"error":"forbidden"}`, and anything but a strict `true` is ignored.
+  A marked comment carries `staff: true` in the list response and the
+  POST/PATCH echo; an unmarked one has no `staff` key, and neither does a
+  deleted placeholder. Authors never carry `role` or `is_admin` — only a
+  comment its author chose to mark reveals a role. Edits never change the
+  mark; demoting the author to `user` clears all of theirs (cached pages
+  catch up within 60 s).
+
 Reply collapsing is **purely client-side** — the replies arrive in the single
 list response and the widget folds them. There is no `data-*` per-page
 override; these are instance-wide. One backstop applies to that response: a

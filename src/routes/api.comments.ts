@@ -170,6 +170,8 @@ type CreateBody = {
 	post_published?: number | string | null;
 	form_ts?: string;
 	[HONEYPOT_FIELD]?: string;
+	/** Only a strict `true` counts; role-checked below. */
+	as_staff?: unknown;
 };
 
 // Upper bound for a host-supplied publish time (~year 2100), matching the
@@ -224,6 +226,7 @@ const serializeComment = (c: Comment, author: User) => {
 		deleted_at: c.deleted_at,
 		deleted_by: isDeleted ? c.deleted_by : null,
 		created_at: c.created_at,
+		...(c.as_staff === 1 && !isDeleted ? { staff: true as const } : {}),
 		// No `is_admin` here either — see the TreeAuthor comment in lib/tree.ts.
 		// This is the POST/PATCH echo of a single comment, but it's the same
 		// public surface and the widget renders both through one code path.
@@ -608,6 +611,14 @@ comments.post("/", async (c) => {
 		author = u;
 	}
 
+	// The staff marker is a claim about the author, so it is checked against
+	// the resolved author row and never trusted from the body. Only a strict
+	// `true` asks for it — `"true"` or `1` from a sloppy client is not a request.
+	const asStaff = body.as_staff === true;
+	if (asStaff && author.role !== "mod" && author.role !== "admin") {
+		return c.json({ error: "forbidden" }, 403);
+	}
+
 	// Validate the supplied post_url: http(s) and on an ALLOWED_ORIGINS origin,
 	// else null. Anything else (`javascript:`, `data:`, scheme-relative, an
 	// unrelated host) is dropped so the permalink redirect cannot be used as
@@ -710,6 +721,7 @@ comments.post("/", async (c) => {
 		ip_hash: ipHash,
 		user_agent: userAgent,
 		depth,
+		as_staff: asStaff,
 	});
 
 	// Bust the cached first page. Older pages bypass cache, so there's

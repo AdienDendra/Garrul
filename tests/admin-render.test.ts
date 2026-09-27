@@ -71,6 +71,7 @@ const makeComment = (over: Partial<AdminComment> = {}): AdminComment => ({
 	score_up: 0,
 	score_down: 0,
 	pinned_at: null,
+	as_staff: 0,
 	author_name: "Alice",
 	author_email: null,
 	author_avatar_url: null,

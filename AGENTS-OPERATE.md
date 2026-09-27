@@ -65,27 +65,34 @@ end-to-end before improvising. Operator-side shape:
 
 1. `npm install` (installs `wrangler` as a dev dep).
 2. `npx wrangler login` — browser OAuth, one-time per machine.
-3. Copy templates: `cp wrangler.example.toml wrangler.toml` and
-   `cp .dev.vars.example .dev.vars`. Both targets are gitignored.
-4. Run `npm run setup`. It creates the D1 database (`garrul-db`)
-   and the four KV namespaces (`RATE_LIMITS`, `OAUTH_STATE`, `SESSIONS`,
-   `TREE_CACHE`), pastes their IDs into `wrangler.toml`, generates
-   `JWT_SECRET` + `IP_HASH_SECRET` straight into Cloudflare (never
-   written to disk), then offers two ways to set the rest: **bulk**
+3. Run `npm run setup`. It copies `wrangler.example.toml` →
+   `wrangler.toml` (an existing one is kept), creates the D1 database
+   (`garrul-db`) and the four KV namespaces (`RATE_LIMITS`, `OAUTH_STATE`,
+   `SESSIONS`, `TREE_CACHE`), pastes their IDs into `wrangler.toml`,
+   generates `JWT_SECRET` + `IP_HASH_SECRET` straight into Cloudflare
+   (never written to disk), then offers two ways to set the rest: **bulk**
    (fill in a copy of `secrets.example.env`, upload with
    `wrangler secret bulk`) or **one prompt per secret**. Skip anything
    you don't have yet — `wrangler secret put NAME` works later.
-5. Fill in `[vars]` in `wrangler.toml` (section 5 has the table).
-6. Apply migrations to **remote** D1: `npm run migrate -- --remote`.
+4. Setup prompts for the four placeholder `[vars]` (`ALLOWED_ORIGINS`,
+   `ADMIN_EMAILS`, `PUBLIC_BASE_URL`, `OAUTH_CALLBACK_BASE`; section 5
+   has the full table). A value already set is the default.
+   `OAUTH_CALLBACK_BASE` defaults to `PUBLIC_BASE_URL`.
+5. Setup applies migrations to **remote** D1: `npm run migrate -- --remote`.
    Without `--remote` only the local Miniflare DB is migrated and the
    deployed Worker will 500.
-7. `npm run deploy` — uploads the Worker and provisions the custom
-   domain.
-8. Smoke-test: `curl -fsSL https://comments.yourdomain.com/api/v1/health`
+6. Setup runs `npm run deploy`. That uploads the Worker and provisions
+   the custom domain. On `*.workers.dev` it offers to write the printed
+   URL into `PUBLIC_BASE_URL` / `OAUTH_CALLBACK_BASE` and redeploy.
+7. Setup smoke-tests `curl -fsS https://comments.yourdomain.com/api/v1/health`
    → `{"status":"ok","service":"garrul","time":"..."}`.
 
-The most common deploy failures are "forgot to set a secret" (step 4)
-and "migrated locally but not remotely" (step 6).
+Steps 4–7 each ask first. A skipped step is printed as a manual command
+at the end, and re-running `npm run setup` is idempotent. For local dev
+only: `cp .dev.vars.example .dev.vars`.
+
+The most common deploy failures are "forgot to set a secret" (step 3)
+and "migrated locally but not remotely" (step 5).
 
 ## 5. Configuration: vars vs. secrets
 
@@ -2212,8 +2219,9 @@ case, but a hard-block user may simply not be able to sign in.
 
 **Migrations applied locally but not remotely.** First deploy 500s on
 every request; logs show `no such table: comments`. Run
-`npm run migrate -- --remote`. `--remote` is mandatory for production;
-`setup.sh` only touches the Miniflare local DB.
+`npm run migrate -- --remote`. `--remote` is mandatory for production.
+`setup.sh` runs it when you answer yes to its migrate step. A bare
+`npm run migrate` touches only the Miniflare local DB.
 
 **`Host` header mismatch behind a proxy.** If the Worker sits behind a
 non-Cloudflare proxy that rewrites `Host`, the `/AGENTS.md` route

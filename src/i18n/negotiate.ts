@@ -63,6 +63,34 @@ const MAX_TAG_LENGTH = 35;
  */
 const MACROLANGUAGE_ALIASES: Record<string, string> = { no: "nb" };
 
+/** Chinese regions that use Traditional Chinese when no script is specified. */
+const TRADITIONAL_CHINESE_REGIONS = new Set(["tw", "hk", "mo"]);
+
+/**
+ * Resolve Chinese script and region subtags without reading BCP 47 extensions.
+ * An explicit script wins over the region: `zh-Hans-TW` must not become
+ * Traditional Chinese just because its region is Taiwan.
+ */
+const traditionalChineseLocale = (subtags: string[]): string | undefined => {
+	if (subtags[0] !== "zh") return undefined;
+
+	// Extension sequences begin with a singleton (`u`, `x`, etc.). Their values
+	// are opaque and must not be mistaken for script or region subtags.
+	const extensionStart = subtags.findIndex(
+		(subtag, index) => index > 0 && /^[a-z0-9]$/.test(subtag),
+	);
+	const languageSubtags = extensionStart < 0 ? subtags : subtags.slice(0, extensionStart);
+
+	const second = languageSubtags[1];
+	const hasScript = second !== undefined && /^[a-z]{4}$/.test(second);
+	if (hasScript) {
+		if (second !== "hant") return undefined;
+		return canonical("zh-hant");
+	}
+
+	return TRADITIONAL_CHINESE_REGIONS.has(second ?? "") ? canonical("zh-hant") : undefined;
+};
+
 /**
  * Match a raw tag against the registry: exact first, then the primary subtag,
  * so `de-DE` and `de-AT` both land on `de`.
@@ -76,6 +104,8 @@ export const matchLocale = (raw: string | null | undefined): string | undefined 
 	if (!tag || tag.length > MAX_TAG_LENGTH) return undefined;
 	const exact = canonical(tag);
 	if (exact) return exact;
+	const traditionalChinese = traditionalChineseLocale(tag.split("-"));
+	if (traditionalChinese) return traditionalChinese;
 	const primary = tag.split("-")[0];
 	return primary ? canonical(MACROLANGUAGE_ALIASES[primary] ?? primary) : undefined;
 };

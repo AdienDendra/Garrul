@@ -561,7 +561,14 @@ deploy_worker() {
 		if var_is_placeholder OAUTH_CALLBACK_BASE; then
 			set_var OAUTH_CALLBACK_BASE "$url"
 		fi
+		set +e
 		npm run deploy
+		rc=$?
+		set -e
+		if [ "$rc" -ne 0 ]; then
+			echo "error: npm run deploy failed (exit $rc). Fix the above and re-run." >&2
+			exit "$rc"
+		fi
 	fi
 }
 

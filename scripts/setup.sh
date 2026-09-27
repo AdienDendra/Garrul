@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
-# Garrul setup — prompt-driven first-time configuration.
+# Garrul setup — prompt-driven install, from a fresh clone to a live Worker.
 # Creates D1 + KV namespaces, writes their IDs into wrangler.toml (matched by
-# binding name, so a reordered or hand-edited file is safe), and sets production
-# secrets — either in bulk from secrets.env or one prompt at a time.
+# binding name, so a reordered or hand-edited file is safe), sets production
+# secrets (bulk from secrets.env or one prompt at a time), writes the
+# placeholder [vars], then offers to migrate the remote D1, deploy, and check
+# /api/v1/health. Every step after the secrets asks first; re-runs keep
+# existing ids and vars.
 #
 # Every config list below is generated between BEGIN/END markers — the secret
 # prompts and the next-steps vars from scripts/config-registry.ts, the create_d1
@@ -73,8 +76,9 @@ confirm_route() {
 		*)
 			echo
 			echo "✓ staying on *.workers.dev — leave [[routes]] commented out."
-			echo "  After your first deploy, set PUBLIC_BASE_URL and"
-			echo "  OAUTH_CALLBACK_BASE to the workers.dev URL wrangler prints."
+			echo "  Leave PUBLIC_BASE_URL and OAUTH_CALLBACK_BASE empty at the vars"
+			echo "  prompt; after the deploy, setup offers to fill them from the"
+			echo "  workers.dev URL wrangler prints."
 			echo "  ALLOWED_ORIGINS stays the site that embeds the widget."
 			;;
 	esac
@@ -531,6 +535,101 @@ if confirm_yes "Set them now?"; then
 else
 	echo "  skipped — edit [vars] in wrangler.toml by hand"
 	PENDING=1
+fi
+
+# The workers.dev hostname can't be known before the first deploy, so this is
+# the first point where setup can fill PUBLIC_BASE_URL for someone who chose it.
+deploy_worker() {
+	local log rc url
+	log=$(mktemp)
+	set +e
+	npm run deploy 2>&1 | tee "$log"
+	rc=${PIPESTATUS[0]}
+	set -e
+	url=$(grep -Eo 'https://[A-Za-z0-9.-]+\.workers\.dev' "$log" | head -1 || true)
+	rm -f "$log"
+	if [ "$rc" -ne 0 ]; then
+		echo "error: npm run deploy failed (exit $rc). Fix the above and re-run." >&2
+		exit "$rc"
+	fi
+	if [ -z "$url" ] || ! var_is_placeholder PUBLIC_BASE_URL; then
+		return 0
+	fi
+	echo
+	if confirm_yes "PUBLIC_BASE_URL is still the placeholder. Use $url and redeploy?"; then
+		set_var PUBLIC_BASE_URL "$url"
+		if var_is_placeholder OAUTH_CALLBACK_BASE; then
+			set_var OAUTH_CALLBACK_BASE "$url"
+		fi
+		npm run deploy
+	fi
+}
+
+verify_health() {
+	local base i
+	base=$(get_var PUBLIC_BASE_URL wrangler.toml)
+	base="${base%/}"
+	if var_is_placeholder PUBLIC_BASE_URL; then
+		echo "  skipped — PUBLIC_BASE_URL is still the placeholder \"$base\""
+		PENDING=1
+		return 0
+	fi
+	if ! command -v curl >/dev/null 2>&1; then
+		echo "  skipped — curl not installed; open $base/api/v1/health in a browser"
+		PENDING=1
+		return 0
+	fi
+	# A fresh custom domain can take ~30s to get its certificate.
+	for i in 1 2 3; do
+		if curl -fsS "$base/api/v1/health"; then
+			echo
+			echo "✓ $base/api/v1/health answered — Garrul is live"
+			return 0
+		fi
+		[ "$i" = 3 ] || sleep 10
+	done
+	echo "✗ $base/api/v1/health did not answer." >&2
+	echo "  See docs/troubleshooting.md for the common failure modes." >&2
+	PENDING=1
+}
+
+echo
+echo "=== Migrate, deploy, verify ==="
+
+echo
+if confirm_yes "Apply the schema to production D1 (npm run migrate -- --remote)?"; then
+	set +e
+	npm run migrate -- --remote
+	rc=$?
+	set -e
+	if [ $rc -ne 0 ]; then
+		echo "error: npm run migrate -- --remote failed (exit $rc). Fix the above and re-run." >&2
+		exit $rc
+	fi
+else
+	echo "  skipped — run later with: npm run migrate -- --remote"
+	PENDING=1
+fi
+
+echo
+if confirm_yes "Deploy the Worker (npm run deploy)?"; then
+	deploy_worker
+	echo
+	if confirm_yes "Smoke-test /api/v1/health?"; then
+		verify_health
+	else
+		PENDING=1
+	fi
+else
+	echo "  skipped — run later with: npm run deploy"
+	PENDING=1
+fi
+
+if [ "$PENDING" = 0 ]; then
+	echo
+	echo "=== Done ==="
+	echo "Tail logs: npm run tail"
+	exit 0
 fi
 
 echo

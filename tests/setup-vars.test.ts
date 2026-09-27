@@ -100,3 +100,19 @@ describe("setup.sh [vars] helpers", () => {
 		expect(toml()).toContain('ALLOWED_ORIGINS = "https://ok.test"');
 	});
 });
+
+describe("setup.sh end-to-end steps", () => {
+	it("migrates, deploys and verifies after the secrets, in that order", () => {
+		const s = readFileSync(SETUP, "utf8");
+		const at = [
+			'echo "=== Production secrets ==="',
+			"\tconfigure_vars\n",
+			"\tnpm run migrate -- --remote\n",
+			"\tdeploy_worker\n",
+			"\t\tverify_health\n",
+			'echo "=== Next steps ==="',
+		].map((needle) => s.indexOf(needle));
+		for (const i of at) expect(i).toBeGreaterThan(-1);
+		expect(at).toEqual([...at].sort((a, b) => a - b));
+	});
+});

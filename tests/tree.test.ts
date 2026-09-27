@@ -58,6 +58,7 @@ const mk = (
 	depth,
 	score_up: 0,
 	score_down: 0,
+	pinned_at: null,
 });
 
 /** Chain of `n` comments, each a reply to the previous. Stored depth ascends

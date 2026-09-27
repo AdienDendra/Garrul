@@ -251,6 +251,7 @@ describe("renderQueue row context", () => {
 		depth: 1,
 		score_up: 0,
 		score_down: 0,
+		pinned_at: null,
 		author_name: HOSTILE,
 		author_email: null,
 		author_avatar_url: null,

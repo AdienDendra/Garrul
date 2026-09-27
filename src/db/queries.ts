@@ -105,6 +105,9 @@ export type Comment = {
 	depth: number;
 	score_up: number;
 	score_down: number;
+	/** Epoch ms this top-level comment was pinned; NULL when not pinned. At
+	 *  most one per post (migration 0025's partial UNIQUE index). */
+	pinned_at: number | null;
 };
 
 /**
@@ -120,7 +123,7 @@ export type TreeComment = Omit<Comment, "body_md" | "ip_hash" | "user_agent">;
 /** Column list backing `TreeComment`. Keep the two in sync. */
 const TREE_COLUMNS = `id, post_slug, parent_id, user_id, body_html,
 	        renderer_version, status, edited_at, deleted_at, deleted_by,
-	        created_at, depth, score_up, score_down`;
+	        created_at, depth, score_up, score_down, pinned_at`;
 
 // Every users SELECT that feeds `toUser` goes through this list. It used to be
 // spelled out at six call sites, which meant a new column silently arrived as
@@ -545,6 +548,7 @@ export const insertComment = async (
 		depth: input.depth,
 		score_up: 0,
 		score_down: 0,
+		pinned_at: null,
 	};
 };
 
@@ -556,7 +560,7 @@ export const getComment = async (
 		.prepare(
 			`SELECT id, post_slug, parent_id, user_id, body_md, body_html,
 			        renderer_version, status, edited_at, deleted_at, deleted_by,
-			        ip_hash, user_agent, created_at, depth, score_up, score_down
+			        ip_hash, user_agent, created_at, depth, score_up, score_down, pinned_at
 			 FROM comments WHERE id = ?`,
 		)
 		.bind(id)
@@ -577,7 +581,7 @@ export const getCommentsByIds = async (
 		.prepare(
 			`SELECT id, post_slug, parent_id, user_id, body_md, body_html,
 			        renderer_version, status, edited_at, deleted_at, deleted_by,
-			        ip_hash, user_agent, created_at, depth, score_up, score_down
+			        ip_hash, user_agent, created_at, depth, score_up, score_down, pinned_at
 			   FROM comments WHERE id IN (${placeholders})`,
 		)
 		.bind(...ids)
@@ -684,6 +688,10 @@ export type CommentSort = (typeof COMMENT_SORTS)[number];
  * Cursor semantics: return rows strictly after the cursor position in the
  * requested order. The caller passes `limit = pageSize + 1` to learn whether a
  * next page exists.
+ *
+ * The approved pinned thread is excluded in every sort and on every page (a
+ * dormant pin on a hidden row pages normally); the route prepends it to page
+ * one (getPinnedThreadRef), so it never repeats and never moves a cursor.
  */
 export const listThreadRefsForPost = async (
 	db: D1Database,
@@ -727,7 +735,9 @@ export const listThreadRefsForPost = async (
 		.prepare(
 			`SELECT id, (score_up - score_down) AS score, created_at
 			   FROM comments
-			  WHERE post_slug = ? AND parent_id IS NULL AND ${visible.sql} ${cursorSql}
+			  WHERE post_slug = ? AND parent_id IS NULL
+			    AND (pinned_at IS NULL OR status <> 'approved')
+			    AND ${visible.sql} ${cursorSql}
 			  ORDER BY ${order}
 			  LIMIT ?`,
 		)
@@ -754,6 +764,63 @@ export const getThreadCreatedAt = async (
 		.bind(id, post_slug)
 		.first<{ created_at: number }>();
 	return row ? row.created_at : null;
+};
+
+/**
+ * The post's pinned top-level thread, as a ThreadRef, or null. At most one row
+ * can match (comments_pinned_idx). `status = 'approved'` is the only thing
+ * that retires a pin when the comment is hidden: no status writer clears
+ * pinned_at, so a spammed or deleted pin goes dormant here and pages normally
+ * in listThreadRefsForPost.
+ *
+ * `.first()`, not `.all()` plus LIMIT: one row by construction.
+ */
+export const getPinnedThreadRef = async (
+	db: D1Database,
+	post_slug: string,
+): Promise<ThreadRef | null> =>
+	await db
+		.prepare(
+			`SELECT id, (score_up - score_down) AS score, created_at
+			   FROM comments
+			  WHERE post_slug = ? AND pinned_at IS NOT NULL
+			    AND parent_id IS NULL AND status = 'approved'`,
+		)
+		.bind(post_slug)
+		.first<ThreadRef>();
+
+/**
+ * Pin or unpin one comment. Pinning is a two-statement batch — clear the
+ * post's current pin, then set the target — in that order, because the
+ * partial UNIQUE index rejects a second non-NULL pinned_at on the slug. The
+ * setter repeats the pinnable predicate so a comment spammed between the
+ * caller's check and this write is not pinned.
+ */
+export const setCommentPin = async (
+	db: D1Database,
+	comment: { id: string; post_slug: string },
+	pinned: boolean,
+): Promise<void> => {
+	if (!pinned) {
+		await db
+			.prepare("UPDATE comments SET pinned_at = NULL WHERE id = ?")
+			.bind(comment.id)
+			.run();
+		return;
+	}
+	await db.batch([
+		db
+			.prepare(
+				"UPDATE comments SET pinned_at = NULL WHERE post_slug = ? AND pinned_at IS NOT NULL",
+			)
+			.bind(comment.post_slug),
+		db
+			.prepare(
+				`UPDATE comments SET pinned_at = ?
+				  WHERE id = ? AND parent_id IS NULL AND status = 'approved'`,
+			)
+			.bind(Date.now(), comment.id),
+	]);
 };
 
 /**
@@ -825,7 +892,7 @@ export const listLatestApprovedComments = async (
 		.prepare(
 			`SELECT c.id, c.post_slug, c.parent_id, c.user_id, c.body_md, c.body_html,
 			        c.renderer_version, c.status, c.edited_at, c.deleted_at, c.deleted_by,
-			        c.ip_hash, c.user_agent, c.created_at, c.depth, c.score_up, c.score_down,
+			        c.ip_hash, c.user_agent, c.created_at, c.depth, c.score_up, c.score_down, c.pinned_at,
 			        u.name AS author_name
 			   FROM comments c
 			   JOIN users u ON u.id = c.user_id
@@ -1395,7 +1462,7 @@ export const adminListComments = async (
 	const sql = `
 		SELECT c.id, c.post_slug, c.parent_id, c.user_id, c.body_md, c.body_html,
 		       c.renderer_version, c.status, c.edited_at, c.deleted_at, c.deleted_by,
-		       c.ip_hash, c.user_agent, c.created_at, c.depth, c.score_up, c.score_down,
+		       c.ip_hash, c.user_agent, c.created_at, c.depth, c.score_up, c.score_down, c.pinned_at,
 		       u.name       AS author_name,
 		       u.email      AS author_email,
 		       u.avatar_url AS author_avatar_url,
@@ -3085,7 +3152,7 @@ export const adminGetCommentDetail = async (
 		.prepare(
 			`SELECT c.id, c.post_slug, c.parent_id, c.user_id, c.body_md, c.body_html,
 			        c.renderer_version, c.status, c.edited_at, c.deleted_at, c.deleted_by,
-			        c.ip_hash, c.user_agent, c.created_at, c.depth,
+			        c.ip_hash, c.user_agent, c.created_at, c.depth, c.pinned_at,
 			        u.name       AS author_name,
 			        u.email      AS author_email,
 			        u.avatar_url AS author_avatar_url,

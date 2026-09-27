@@ -778,6 +778,13 @@ see AGENTS-OPERATE.md §5) control the volume:
   `depth` — past the flatten point every node reports `depth: 4` regardless of
   how deep it actually is.
 
+- **Pinned comment.** A moderator can pin one approved top-level comment per
+  post. Page one of the list (and bootstrap) carries it first, marked
+  `"pinned": true`, as an extra thread on top of `comments_per_page`; no other
+  node carries the key. Later pages never include it and cursors are
+  unaffected. A pinned comment that is hidden stops being served as the pin
+  and pages normally; re-approving it restores the pin.
+
 Reply collapsing is **purely client-side** — the replies arrive in the single
 list response and the widget folds them. There is no `data-*` per-page
 override; these are instance-wide. One backstop applies to that response: a

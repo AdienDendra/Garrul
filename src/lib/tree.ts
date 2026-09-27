@@ -75,6 +75,9 @@ export type TreeNode = {
 	/** -1 / 0 / 1; only meaningful for the requesting viewer. Anonymous
 	 *  viewers always see 0 (and their list response is KV-cached). */
 	my_vote: -1 | 0 | 1;
+	/** Present (always `true`) only on the post's pinned thread. Omitted rather
+	 *  than `false` so an unpinned tree serializes exactly as before. */
+	pinned?: true;
 	replies: TreeNode[];
 };
 
@@ -224,6 +227,11 @@ const toNode = (
 	score_up: row.score_up ?? 0,
 	score_down: row.score_down ?? 0,
 	my_vote: myVotes.get(row.id) ?? 0,
+	// A dormant pin (the row left `approved`) pages normally and is not flagged,
+	// matching getPinnedThreadRef.
+	...(row.pinned_at != null && row.status === "approved"
+		? { pinned: true as const }
+		: {}),
 	replies: [],
 });
 

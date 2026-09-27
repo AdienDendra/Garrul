@@ -27,6 +27,7 @@ import {
 	enqueueNotification,
 	getOrCreateGhost,
 	getComment,
+	getPinnedThreadRef,
 	getPost,
 	getThreadCreatedAt,
 	getUser,
@@ -1096,17 +1097,25 @@ export const buildTreePage = async (
 	});
 	const pageRefs = refs.slice(0, pageSize);
 	const more = refs.length > pageSize;
+	// The pinned thread rides on the first page only, ahead of the sort and on
+	// top of pageSize. listThreadRefsForPost excludes pinned rows everywhere, so
+	// it never repeats on a later page and never moves a cursor; next_cursor
+	// still comes from pageRefs below. `cursorKey === null` is "first page" —
+	// the same test the cache key uses, so a garbage cursor gets the pin too.
+	const pinnedRef =
+		cursorKey === null ? await getPinnedThreadRef(env.DB, slug) : null;
+	const shownRefs = pinnedRef ? [pinnedRef, ...pageRefs] : pageRefs;
 
 	const { rows, truncated } = await listCommentsForThreads(
 		env.DB,
-		pageRefs.map((r) => r.id),
+		shownRefs.map((r) => r.id),
 		viewerId,
 	);
 	if (truncated) {
 		log.warn("comments.page_truncated", {
 			post_slug: slug,
 			sort,
-			threads: pageRefs.length,
+			threads: shownRefs.length,
 			limit: TREE_ROW_LIMIT,
 		});
 	}
@@ -1147,7 +1156,7 @@ export const buildTreePage = async (
 	// SQL already ordered and sliced the threads; restore that order over the
 	// builder's output, which always comes back created_at ASC. Replies stay
 	// created_at ASC either way so threaded conversation reads top-down.
-	const rank = new Map(pageRefs.map((r, i) => [r.id, i]));
+	const rank = new Map(shownRefs.map((r, i) => [r.id, i]));
 	const page = allThreads.sort(
 		(a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0),
 	);

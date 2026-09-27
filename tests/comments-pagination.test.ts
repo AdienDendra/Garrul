@@ -864,3 +864,63 @@ describe("engagement query batching", () => {
 		expect(queries.length).toBe(0);
 	});
 });
+
+describe("GET /comments — pinned thread", () => {
+	type Pinnable = ListResp["threads"][number] & { pinned?: boolean };
+	const pin = (idIndex: number) =>
+		sqlite.prepare("UPDATE comments SET pinned_at = 1 WHERE id = ?").run(mkUlid(idIndex));
+
+	it.each(["new", "old", "top"] as const)(
+		"sort=%s: pinned leads page one as an extra thread and never repeats",
+		async (sort) => {
+			seedThreads(30);
+			pin(12);
+			const env = mkEnv();
+			const p1 = await get(env, `slug=${SLUG}&sort=${sort}`);
+			expect(p1.threads).toHaveLength(26);
+			const first = p1.threads[0] as Pinnable;
+			expect(first.id).toBe(mkUlid(12));
+			expect(first.pinned).toBe(true);
+			for (const t of p1.threads.slice(1)) expect("pinned" in t).toBe(false);
+			expect(p1.next_cursor).not.toBeNull();
+
+			const p2 = await get(
+				env,
+				`slug=${SLUG}&sort=${sort}&before=${encodeURIComponent(p1.next_cursor!)}`,
+			);
+			const ids = [...p1.threads, ...p2.threads].map((t) => t.id);
+			expect(p2.threads.map((t) => t.id)).not.toContain(mkUlid(12));
+			expect(new Set(ids).size).toBe(30);
+			expect(ids).toHaveLength(30);
+		},
+	);
+
+	it("a pinned row that is not approved is not served", async () => {
+		seedThreads(3);
+		pin(2);
+		sqlite.prepare("UPDATE comments SET status = 'spam' WHERE id = ?").run(mkUlid(2));
+		const page = await get(mkEnv(), `slug=${SLUG}`);
+		expect(page.threads.map((t) => t.id)).not.toContain(mkUlid(2));
+		expect(page.threads).toHaveLength(2);
+	});
+
+	it("a deleted pinned thread with replies pages as a tombstone, unflagged", async () => {
+		seedThreads(3);
+		seedReplies(1, 1);
+		pin(1);
+		sqlite
+			.prepare("UPDATE comments SET status = 'deleted', deleted_at = 5 WHERE id = ?")
+			.run(mkUlid(1));
+		const page = await get(mkEnv(), `slug=${SLUG}`);
+		expect(page.threads).toHaveLength(3);
+		const tomb = page.threads.find((t) => t.id === mkUlid(1));
+		expect(tomb).toBeDefined();
+		expect("pinned" in tomb!).toBe(false);
+	});
+
+	it("no pin, no key: an unpinned tree is byte-for-byte the old shape", async () => {
+		seedThreads(2);
+		const page = await get(mkEnv(), `slug=${SLUG}`);
+		for (const t of page.threads) expect("pinned" in t).toBe(false);
+	});
+});

@@ -786,8 +786,10 @@ see AGENTS-OPERATE.md §5) control the volume:
   and pages normally; re-approving it restores the pin.
 
 - **Staff badge (opt-in per comment).** `POST /api/v1/comments` accepts
-  `as_staff: true` only from a `mod`/`admin` session; anyone else gets
-  `403 {"error":"forbidden"}`, and anything but a strict `true` is ignored.
+  `as_staff: true` only from a signed-in `mod`/`admin` session; anyone else
+  gets `403 {"error":"forbidden"}`. A caller with no session is refused before
+  any rate limit, Turnstile check or ghost upsert, whatever role its IP's ghost
+  row holds. Anything but a strict `true` is ignored.
   A marked comment carries `staff: true` in the list response and the
   POST/PATCH echo; an unmarked one has no `staff` key, and neither does a
   deleted placeholder. Authors never carry `role` or `is_admin` — only a

@@ -469,6 +469,14 @@ comments.post("/", async (c) => {
 
 	const session = await readSession(c);
 
+	// Only a strict `true` asks for the staff marker — `"true"` or `1` from a
+	// sloppy client is not a request. A caller with no session is refused here,
+	// before any budget, siteverify or ghost upsert: a ghost row is keyed on the
+	// IP hash alone, so if one were ever promoted, every anonymous poster behind
+	// that address would inherit its role.
+	const asStaff = body.as_staff === true;
+	if (asStaff && !session) return c.json({ error: "forbidden" }, 403);
+
 	// Anonymous path: name + Turnstile required on top of the rate limit.
 	let author: User;
 	const ipHash = await requireIpHash(c);
@@ -612,9 +620,7 @@ comments.post("/", async (c) => {
 	}
 
 	// The staff marker is a claim about the author, so it is checked against
-	// the resolved author row and never trusted from the body. Only a strict
-	// `true` asks for it — `"true"` or `1` from a sloppy client is not a request.
-	const asStaff = body.as_staff === true;
+	// the resolved author row and never trusted from the body.
 	if (asStaff && author.role !== "mod" && author.role !== "admin") {
 		return c.json({ error: "forbidden" }, 403);
 	}

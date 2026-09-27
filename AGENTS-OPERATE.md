@@ -999,7 +999,7 @@ State-changing endpoints (all under `/admin/api/...`, all require admin
 session + Origin allowlist, all write an `audit_log` row before
 responding):
 
-- `POST /admin/api/comments/:id` — `{action: approve|spam|delete|restore, reason?}`
+- `POST /admin/api/comments/:id` — `{action: approve|spam|delete|restore, reason?}`, or `{action: pin|unpin}` (approved top-level only, else 400 `not_pinnable`; one pin per post, pinning moves it; audited `comment.pin` / `comment.unpin`; spam/delete drops the pin)
 - `POST /admin/api/comments/bulk` — `{ids: string[], action}` (cap 100)
 - `POST /admin/api/comments/:id/reports/resolve` — clears open reader reports on a comment (audited `report.resolve`)
 - `POST /admin/api/comments/:id/reply` — `{body_md, saved_reply_id?, notify?}` posts a moderator reply nested under `:id` (audited `comment.reply`; `notify` must be a real boolean when present, defaults to true, and fans out to the post's confirmed subscribers; `saved_reply_id` is audit provenance only and must be a preset this mod can see)

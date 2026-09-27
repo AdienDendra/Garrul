@@ -99,6 +99,7 @@ import {
 	type CommentAction,
 	eraseUser,
 	moderateComment,
+	pinComment,
 	resolveReports,
 } from "../lib/moderation";
 import { checkOutboundUrl } from "../lib/url-safety";
@@ -1888,6 +1889,19 @@ admin.post("/api/comments/:id", async (c) => {
 	const body = await c.req
 		.json<{ action?: string; reason?: string }>()
 		.catch(() => null);
+	if (body?.action === "pin" || body?.action === "unpin") {
+		const pinned = await pinComment({
+			env: c.env,
+			reqUrl: c.req.url,
+			adminId: user.id,
+			commentId: id,
+			pin: body.action === "pin",
+		});
+		if (!pinned.ok) {
+			return c.json({ error: pinned.error }, pinned.error === "not_found" ? 404 : 400);
+		}
+		return c.json({ ok: true, id: pinned.id, pinned: pinned.pinned });
+	}
 	const action = body?.action as CommentAction | undefined;
 	if (
 		action !== "approve" &&

@@ -2659,6 +2659,9 @@ export const ADMIN_ACTIONS = [
 	// A moderator reply posted from the admin panel. Free text, optionally
 	// prefilled from a saved reply — `meta.saved_reply_id` records which.
 	"comment.reply",
+	// Pinning a top-level comment above the sort. meta carries the slug only.
+	"comment.pin",
+	"comment.unpin",
 	"import.disqus",
 	// Landed alongside `import.disqus` in routes/admin.ts, but never added
 	// here — so rows for these three sources were audited but unfilterable

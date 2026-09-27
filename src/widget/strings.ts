@@ -96,6 +96,7 @@ export const EN = {
 
 	// ── A comment ───────────────────────────────────────────────────────────
 	"w.verified": "verified",
+	"w.pinned": "pinned",
 	"w.edited": "· edited",
 	"w.pending": "Pending approval",
 	"w.removed_by_mod": "[removed by a moderator]",

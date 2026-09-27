@@ -54,6 +54,7 @@ export const zhHant = {
 
 	// ── A comment ───────────────────────────────────────────────────────────
 	"w.verified": "已驗證",
+	"w.pinned": "置頂",
 	"w.edited": "· 已編輯",
 	"w.pending": "等待核准",
 	"w.removed_by_mod": "[版主已移除此留言]",

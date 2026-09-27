@@ -50,6 +50,9 @@ export type TreeNode = {
 	score_up: number;
 	score_down: number;
 	my_vote: -1 | 0 | 1;
+	/** Only on the post's pinned thread (page one). Absent otherwise — never
+	 *  `false` — so read it as a truthiness check. */
+	pinned?: true;
 	replies: TreeNode[];
 };
 

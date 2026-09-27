@@ -79,6 +79,7 @@ export const nl = {
 
 	// ── A comment ───────────────────────────────────────────────────────────
 	"w.verified": "geverifieerd",
+	"w.pinned": "vastgezet",
 	"w.edited": "· bewerkt",
 	"w.pending": "Wacht op goedkeuring",
 	"w.removed_by_mod": "[verwijderd door een moderator]",

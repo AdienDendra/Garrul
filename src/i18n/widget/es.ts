@@ -62,6 +62,7 @@ export const es = {
 
 	// ── A comment ───────────────────────────────────────────────────────────
 	"w.verified": "verificado",
+	"w.pinned": "fijado",
 	"w.edited": "· editado",
 	"w.pending": "Pendiente de aprobación",
 	"w.removed_by_mod": "[eliminado por un moderador]",

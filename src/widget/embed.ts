@@ -2407,6 +2407,7 @@ const buildComment = (n: TreeNode, ctx: WidgetCtx): HTMLElement => {
 	if (n.author.provider !== "anon") {
 		meta.appendChild(el("span", "gr-verified", s("w.verified")));
 	}
+	if (n.pinned) meta.appendChild(el("span", "gr-pinned", s("w.pinned")));
 	// The timestamp is the permalink, the way Reddit/HN/Disqus do it — a plain
 	// anchor, so right-click-copy, middle-click and Cmd-click all work natively
 	// and we spend no bytes on a clipboard shim. Clicking it is handled by the

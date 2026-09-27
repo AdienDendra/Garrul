@@ -494,7 +494,8 @@ button:active:not([disabled]) { opacity: 0.75; }
 .gr-main { flex: 1; min-width: 0; }
 .gr-meta { display: flex; gap: 0.5rem; align-items: baseline; flex-wrap: wrap; }
 .gr-name { font-weight: 600; }
-.gr-verified {
+.gr-verified,
+.gr-pinned {
 	background: var(--gr-badge-bg);
 	color: var(--gr-badge-fg);
 	font-size: 0.75em;

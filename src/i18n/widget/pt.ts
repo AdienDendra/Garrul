@@ -97,6 +97,7 @@ export const pt = {
 
 	// ── A comment ───────────────────────────────────────────────────────────
 	"w.verified": "verificado",
+	"w.pinned": "fixado",
 	"w.edited": "· editado",
 	// "Pendente de aprovação" reads in both variants; "Aguardando aprovação" is
 	// the Brazilian gerund and "A aguardar aprovação" the European one.

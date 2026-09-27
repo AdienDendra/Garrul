@@ -64,6 +64,7 @@ export const fr = {
 
 	// ── A comment ───────────────────────────────────────────────────────────
 	"w.verified": "vérifié",
+	"w.pinned": "épinglé",
 	"w.edited": "· modifié",
 	"w.pending": "En attente de validation",
 	"w.removed_by_mod": "[supprimé par un modérateur]",

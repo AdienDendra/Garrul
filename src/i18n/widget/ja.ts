@@ -88,6 +88,7 @@ export const ja = {
 
 	// ── A comment ───────────────────────────────────────────────────────────
 	"w.verified": "確認済み",
+	"w.pinned": "固定",
 	"w.edited": "· 編集済み",
 	"w.pending": "承認待ち",
 	"w.removed_by_mod": "[モデレーターにより削除されました]",

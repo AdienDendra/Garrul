@@ -926,6 +926,7 @@ tracked by the `_migrations` table. Current set:
 - `0022_reaction_kind_fire.sql` — renames the `like` reaction to `fire`
 - `0023_moderator_notes.sql` — `moderator_notes`, internal moderator context on one comment or one account. Never rendered to readers, and the note *body* never reaches `audit_log`
 - `0024_subscriptions_token_index.sql` — `subscriptions(token)`; the unsubscribe-link lookup was a full table scan on two endpoints that take no session and no rate limit, so a loop of random tokens read the whole table per request
+- `0025_comment_pins.sql` — `comments.pinned_at` plus a partial UNIQUE index: one pinned top-level comment per post
 - `0026_staff_badge.sql` — `comments.as_staff`, the per-comment opt-in staff marker
 
 Run with `npm run migrate` (local Miniflare) or

@@ -75,6 +75,29 @@ describe("POST /admin/api/comments/:id — pin/unpin", () => {
 		expect(pinOf("a")).not.toBeNull();
 	});
 
+	// A refused pin must never disturb the post's existing pin: pinComment
+	// checks the target and returns before calling setCommentPin, so a reply, a
+	// pending comment or an unknown id all leave "a" pinned.
+	it("a refused pin (reply, pending, unknown id) leaves the post's existing pin in place", async () => {
+		const { act, pinOf } = seeded();
+		await act("a", "pin");
+		expect(pinOf("a")).not.toBeNull();
+
+		const reply = await act("r", "pin");
+		expect(reply.status).toBe(400);
+		expect(await reply.json()).toEqual({ error: "not_pinnable" });
+		expect(pinOf("a")).not.toBeNull();
+
+		const pending = await act("q", "pin");
+		expect(pending.status).toBe(400);
+		expect(await pending.json()).toEqual({ error: "not_pinnable" });
+		expect(pinOf("a")).not.toBeNull();
+
+		const unknown = await act("nope", "pin");
+		expect(unknown.status).toBe(404);
+		expect(pinOf("a")).not.toBeNull();
+	});
+
 	// Coordinator override 6 (binding over the brief's original AC/test text):
 	// pins are retired at read time, not by the status writers. moderateComment
 	// (spam/delete) never touches pinned_at; only setCommentPin does. A spammed

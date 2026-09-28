@@ -546,6 +546,8 @@ writing a comment. Both surfaces default **off** and are server-gated:
 - Both POST routes answer `400 invalid_kind` for a kind outside that
   surface's list. Rows of a disabled kind are kept; read endpoints still
   return their counts, and the widget renders only enabled kinds.
+- The widget reads both lists once at mount; a Worker that predates them
+  sends neither, and the bundle falls back to the default six.
 
 ### Subscribing to a thread (since v2.10.0)
 

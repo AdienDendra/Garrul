@@ -60,6 +60,8 @@ export type ConfigResponse = {
 	downvotes_enabled?: boolean;
 	page_reactions_enabled?: boolean;
 	page_votes_enabled?: boolean;
+	reaction_kinds?: string[];
+	page_reaction_kinds?: string[];
 	subscriptions_enabled?: boolean;
 	replies_per_thread?: number;
 	auto_collapse_depth?: number;

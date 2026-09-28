@@ -85,6 +85,26 @@ export const DEFAULT_REACTION_KINDS: readonly string[] = [
 ];
 
 /**
+ * The vocabulary entries a surface should render, from config's
+ * `reaction_kinds` / `page_reaction_kinds`. Order is the operator's. Kinds
+ * this bundle doesn't know are skipped (a newer Worker than the cached
+ * bundle), and anything unusable — including an older Worker that sends no
+ * list — yields the default six, so the widget never renders an empty row.
+ */
+export const pickReactionKinds = (configured: unknown): readonly ReactionKind[] => {
+	const byKind = new Map(REACTION_KINDS.map((r) => [r.kind, r]));
+	const out = new Set<ReactionKind>();
+	if (Array.isArray(configured)) {
+		for (const k of configured) {
+			const r = typeof k === "string" ? byKind.get(k) : undefined;
+			if (r) out.add(r);
+		}
+	}
+	if (out.size > 0) return [...out];
+	return DEFAULT_REACTION_KINDS.map((k) => byKind.get(k) as ReactionKind);
+};
+
+/**
  * Fold a toggle response back into a comment's reaction list.
  *
  * `totals` is authoritative for counts (it is a fresh aggregate over the

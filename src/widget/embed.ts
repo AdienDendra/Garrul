@@ -48,8 +48,9 @@ import { createTurnstileGate, type TurnstileGate } from "./turnstile-gate";
 import { makeS, type StringTable, type WidgetKey } from "./strings";
 import {
 	type ReactionCount,
-	REACTION_KINDS,
+	type ReactionKind,
 	mergeReactionTotals,
+	pickReactionKinds,
 } from "./reactions";
 // The node shape this file renders, plus the arithmetic that turns a POST echo
 // into one. Kept out of here so the depth/flatten/placement rules are reachable
@@ -720,6 +721,11 @@ type WidgetCtx = {
 	downvotesEnabled: boolean;
 	pageReactionsEnabled: boolean;
 	pageVotesEnabled: boolean;
+	// Enabled reaction kinds per surface, in the operator's order, resolved once
+	// from config. The page bar reads `pageReactionKinds` and nothing else, so
+	// every mount mode that renders the bar gets the same list.
+	reactionKinds: readonly ReactionKind[];
+	pageReactionKinds: readonly ReactionKind[];
 	// Whether this install can send mail at all (EMAIL_FROM + PUBLIC_BASE_URL,
 	// derived server-side). Gates both subscribe affordances — the bell and the
 	// composer's notify checkbox — because POST /api/v1/subscribe 503s without
@@ -1102,7 +1108,7 @@ const buildReactions = (n: TreeNode, ctx: WidgetCtx): HTMLElement => {
 	};
 
 	const map = reactionsByKind(n.reactions);
-	for (const { kind, emoji, labelKey } of REACTION_KINDS) {
+	for (const { kind, emoji, labelKey } of ctx.reactionKinds) {
 		// Hide zero-count kinds unless the viewer is signed in (so signed-in
 		// users can react with a kind nobody else has used yet). Anonymous
 		// readers see only used kinds.
@@ -1110,8 +1116,8 @@ const buildReactions = (n: TreeNode, ctx: WidgetCtx): HTMLElement => {
 		const btn = el("button", "gr-reaction");
 		btn.type = "button";
 		btn.dataset.kind = kind;
-		// The label is hidden text rather than visible text: six labelled cells per
-		// comment would be more chrome than the comment. Hidden *in the tree*
+		// The label is hidden text rather than visible text: a row of labelled cells
+		// per comment would be more chrome than the comment. Hidden *in the tree*
 		// though, never an aria-label — that would become the whole accessible
 		// name and drop the count child, so a screen reader announced "Funny, not
 		// pressed" and never the number the button exists to report. The emoji is
@@ -1192,7 +1198,7 @@ const buildPageEngagement = (ctx: WidgetCtx): HTMLElement => {
 			el("div", "gr-page-react-prompt", s("w.page.react_prompt")),
 		);
 		const reactWrap = el("div", "gr-page-reactions");
-		for (const { kind, emoji, labelKey } of REACTION_KINDS) {
+		for (const { kind, emoji, labelKey } of ctx.pageReactionKinds) {
 			const btn = el("button", "gr-reaction gr-reaction-labelled");
 			btn.type = "button";
 			btn.dataset.kind = kind;
@@ -3576,6 +3582,8 @@ const loadOnce = async (
 	let downvotesEnabled = true;
 	let pageReactionsEnabled = false;
 	let pageVotesEnabled = false;
+	let reactionKinds = pickReactionKinds(undefined);
+	let pageReactionKinds = reactionKinds;
 	// True by default, and read below as `!== false`, so a server older than this
 	// bundle — which sends no such field — keeps offering the notify checkbox it
 	// has always offered. Only an explicit `false` hides the subscribe UI.
@@ -3651,6 +3659,8 @@ const loadOnce = async (
 			downvotesEnabled = cfg.downvotes_enabled !== false;
 			pageReactionsEnabled = cfg.page_reactions_enabled === true;
 			pageVotesEnabled = cfg.page_votes_enabled === true;
+			reactionKinds = pickReactionKinds(cfg.reaction_kinds);
+			pageReactionKinds = pickReactionKinds(cfg.page_reaction_kinds);
 			subscriptionsEnabled = cfg.subscriptions_enabled !== false;
 			if (typeof cfg.replies_per_thread === "number")
 				repliesPerThread = cfg.replies_per_thread;
@@ -3758,6 +3768,8 @@ const loadOnce = async (
 		downvotesEnabled,
 		pageReactionsEnabled,
 		pageVotesEnabled,
+		reactionKinds,
+		pageReactionKinds,
 		subscriptionsEnabled,
 		repliesPerThread,
 		autoCollapseDepth,

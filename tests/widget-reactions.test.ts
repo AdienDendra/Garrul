@@ -13,6 +13,7 @@ import {
 	REACTION_KINDS,
 	REACTION_KIND_SET,
 	mergeReactionTotals,
+	pickReactionKinds,
 } from "../src/widget/reactions";
 
 const prev = [
@@ -102,5 +103,36 @@ describe("the vocabulary", () => {
 		expect(DEFAULT_REACTION_KINDS).toEqual(
 			REACTION_KINDS.slice(0, 6).map((r) => r.kind),
 		);
+	});
+});
+
+describe("pickReactionKinds", () => {
+	const kinds = (v: unknown) => pickReactionKinds(v).map((r) => r.kind);
+	const SIX = ["fire", "love", "wow", "laugh", "hmm", "cry"];
+
+	it("falls back to the original six for a server that sends no list", () => {
+		expect(kinds(undefined)).toEqual(SIX);
+	});
+
+	it("keeps the configured order", () => {
+		expect(kinds(["rocket", "fire", "eyes"])).toEqual(["rocket", "fire", "eyes"]);
+	});
+
+	it("drops kinds this bundle doesn't know, and repeats", () => {
+		// A Worker newer than a cached bundle may enable a kind the bundle has
+		// no emoji for; skipping it beats rendering an empty button.
+		expect(kinds(["fire", "sparkles", "fire", 7])).toEqual(["fire"]);
+	});
+
+	it("falls back when nothing usable is left", () => {
+		expect(kinds([])).toEqual(SIX);
+		expect(kinds(["nope"])).toEqual(SIX);
+		expect(kinds("fire")).toEqual(SIX);
+	});
+
+	it("returns vocabulary entries with emoji and label", () => {
+		expect(pickReactionKinds(["hundred"])).toEqual([
+			{ kind: "hundred", emoji: "💯", labelKey: "w.react.hundred" },
+		]);
 	});
 });

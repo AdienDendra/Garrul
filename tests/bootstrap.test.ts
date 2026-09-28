@@ -560,6 +560,23 @@ describe("bootstrap — view=engagement", () => {
 		expect(seen.some((sql) => /\bFROM\s+comments\b/i.test(sql))).toBe(false);
 	});
 
+	// Mirrors the comments-table check above: this view carries no `subscription`
+	// section (asserted separately), and that has to hold even for a signed-in
+	// reader on an install with mail configured — the one combination where the
+	// full bootstrap does run a subscriptions query.
+	it("runs no subscriptions query, signed in with mail on", async () => {
+		const seen: string[] = [];
+		const db = env.DB as unknown as { prepare: (sql: string) => unknown };
+		env = {
+			...bothOn(),
+			EMAIL_FROM: "noreply@example.com",
+			PUBLIC_BASE_URL: "https://comments.example.com",
+			DB: { ...db, prepare: (sql: string) => (seen.push(sql), db.prepare(sql)) },
+		} as unknown as Bindings;
+		await get(VIEW, SID);
+		expect(seen.some((sql) => /\bFROM\s+subscriptions\b/i.test(sql))).toBe(false);
+	});
+
 	it.each(["bogus", "", "comments"])("rejects view=%j with 400", async (v) => {
 		const res = await get(`/api/v1/bootstrap?slug=${SLUG}&view=${v}`);
 		expect(res.status).toBe(400);

@@ -371,6 +371,17 @@ describe("fetchBootstrap — view=engagement (the standalone reactions bar)", ()
 		expect(await fetchBootstrap(API, SLUG, null, "", "", "engagement")).toBeNull();
 	});
 
+	it("falls back on a non-JSON body — a proxy or captive portal answering 200", async () => {
+		stubFetch(
+			() =>
+				new Response("<html>not json</html>", {
+					status: 200,
+					headers: { "content-type": "text/html" },
+				}),
+		);
+		expect(await fetchBootstrap(API, SLUG, null, "", "", "engagement")).toBeNull();
+	});
+
 	for (const status of [429, 500, 503]) {
 		it(`throws on ${status} rather than spending the legacy calls`, async () => {
 			stubFetch(() => jsonRes({ error: "nope" }, status));

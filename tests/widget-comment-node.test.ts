@@ -20,6 +20,7 @@ import {
 	type PostedEcho,
 	type TreeNode,
 	readPostedEcho,
+	prependAnchor,
 	replySlot,
 	synthesizePosted,
 	topLevelPlacement,
@@ -179,6 +180,37 @@ describe("topLevelPlacement", () => {
 		// new top-level comment belongs on the *last* page, so on a thread past
 		// comments_per_page the reader's own comment was nowhere on screen.
 		expect(topLevelPlacement("old")).toBe("append");
+	});
+});
+
+describe("prependAnchor", () => {
+	const thread = (id: string, pinned = false) => ({
+		id,
+		hasAttribute: (name: string) => pinned && name === "data-pinned",
+		nextSibling: null as unknown,
+	});
+	const list = (...threads: ReturnType<typeof thread>[]) => {
+		threads.forEach((t, i) => {
+			t.nextSibling = threads[i + 1] ?? null;
+		});
+		const first = threads[0] ?? null;
+		return { firstChild: first, firstElementChild: first };
+	};
+
+	it("inserts before the first thread when nothing is pinned", () => {
+		const a = thread("a");
+		expect(prependAnchor(list(a, thread("b")))).toBe(a);
+	});
+
+	it("inserts after a pinned lead thread, never above it", () => {
+		const b = thread("b");
+		expect(prependAnchor(list(thread("p", true), b))).toBe(b);
+		// A pin alone on the page: append after it.
+		expect(prependAnchor(list(thread("p", true)))).toBeNull();
+	});
+
+	it("an empty list inserts at the start", () => {
+		expect(prependAnchor(list())).toBeNull();
 	});
 });
 

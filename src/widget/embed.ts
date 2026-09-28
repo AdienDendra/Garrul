@@ -59,6 +59,7 @@ import {
 	type PostedEcho,
 	type TreeAuthor,
 	type TreeNode,
+	prependAnchor,
 	readPostedEcho,
 	synthesizePosted,
 	topLevelPlacement,
@@ -2677,6 +2678,8 @@ const buildThread = (n: TreeNode, ctx: WidgetCtx): HTMLElement => {
 	wrap.dataset.id = n.id;
 	// Anchor id for the /c/:id permalink redirect to scroll into view.
 	wrap.id = commentAnchorId(n.id);
+	// Read by `prependAnchor`, so a freshly posted comment lands below the pin.
+	if (n.pinned) wrap.dataset.pinned = "1";
 	wrap.appendChild(buildComment(n, ctx));
 	if (n.replies.length > 0) {
 		renderReplyList(replyMountFor(wrap, n, ctx).container, n.replies, ctx);
@@ -3498,7 +3501,7 @@ const insertPostedNode = (
 		// thread, so it is already on screen wherever it belongs.
 		list.querySelector(".gr-empty")?.remove();
 		if (topLevelPlacement(activeSortFor(ctx.root)) === "prepend") {
-			before = list.firstChild;
+			before = prependAnchor(list);
 		}
 	} else if (!parent) {
 		return false;

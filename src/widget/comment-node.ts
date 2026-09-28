@@ -209,6 +209,20 @@ export const topLevelPlacement = (sort: SortKey): "prepend" | "append" =>
 	sort === "old" ? "append" : "prepend";
 
 /**
+ * The node a "prepend" inserts before: the list's first thread, unless that
+ * thread is the pin. The server serves the pin ahead of every sort, so a new
+ * comment lands second rather than displacing it until the next load.
+ * Structurally typed so the node test pool can exercise it without a DOM.
+ */
+export const prependAnchor = <N>(list: {
+	firstChild: N | null;
+	firstElementChild: { hasAttribute(name: string): boolean; nextSibling: N | null } | null;
+}): N | null => {
+	const first = list.firstElementChild;
+	return first?.hasAttribute("data-pinned") ? first.nextSibling : list.firstChild;
+};
+
+/**
  * Build the node to render from the echo, given the parent it was a reply to
  * (`null` for a top-level comment).
  *

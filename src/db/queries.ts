@@ -2644,6 +2644,9 @@ export const ADMIN_ACTIONS = [
 	"unban",
 	"user.erase",
 	"user.export",
+	// Whole-site download. Meta is `{format, counts, complete}` — row counts
+	// only, never contents, same rule as `user.export`.
+	"site.export",
 	"user.revoke_sessions",
 	"rerender",
 	"seed-demo",

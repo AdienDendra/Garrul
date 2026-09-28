@@ -102,6 +102,12 @@ import {
 	pinComment,
 	resolveReports,
 } from "../lib/moderation";
+import {
+	type ExportCounts,
+	exportStream,
+	siteExportCsv,
+	siteExportJson,
+} from "../lib/site-export";
 import { checkOutboundUrl } from "../lib/url-safety";
 import {
 	peekCachedLatestVersion,
@@ -2172,6 +2178,58 @@ admin.get("/api/users/:id/export", async (c) => {
 		"content-type": "application/json; charset=utf-8",
 		"content-disposition": `attachment; filename="garrul-export-${safeId}.json"`,
 		// Never let an export sit in a shared cache.
+		"cache-control": "no-store",
+	});
+});
+
+/**
+ * The whole comment layer as one download — JSON (every exported table) or
+ * CSV (comments only, for a spreadsheet). Contents and exclusions live in
+ * lib/site-export.ts. Streamed, so the Worker never holds the file.
+ *
+ * Same GET-that-writes shape as the per-user export above, so the same
+ * `Sec-Fetch-Site` gate. It reads every row of eight tables — one click
+ * spends a visible slice of the D1 free-tier daily read quota.
+ */
+admin.get("/api/export", async (c) => {
+	if (c.req.header("sec-fetch-site") === "cross-site") {
+		return c.json({ error: "cross_site_forbidden" }, 403);
+	}
+	const user = await requireAdmin(c);
+	if (user instanceof Response) return user;
+	const format = c.req.query("format") ?? "json";
+	if (format !== "json" && format !== "csv") {
+		return c.json({ error: "invalid_format" }, 400);
+	}
+
+	const counts: ExportCounts = {};
+	const chunks =
+		format === "json"
+			? siteExportJson(c.env.DB, counts)
+			: siteExportCsv(c.env.DB, counts);
+	const ctx = c.executionCtx;
+	const body = exportStream(chunks, (complete) => {
+		// Counts only exist once the stream has run, so the audit row is
+		// written at close. `waitUntil` keeps the insert alive when the client
+		// hangs up; awaiting it too means the last byte lands after the row.
+		const write = adminInsertAudit(c.env.DB, {
+			admin_id: user.id,
+			action: "site.export",
+			target_kind: "system",
+			meta: { format, counts, complete },
+		});
+		ctx.waitUntil(write);
+		return write;
+	});
+
+	const date = new Date().toISOString().slice(0, 10);
+	// `c.body`, not `new Response` — see the per-user export above.
+	return c.body(body, 200, {
+		"content-type":
+			format === "json"
+				? "application/json; charset=utf-8"
+				: "text/csv; charset=utf-8",
+		"content-disposition": `attachment; filename="garrul-export-${date}.${format}"`,
 		"cache-control": "no-store",
 	});
 });

@@ -3589,6 +3589,10 @@ const loadOnce = async (
 	let downvotesEnabled = true;
 	let pageReactionsEnabled = false;
 	let pageVotesEnabled = false;
+	// Distinguishes "config loaded and both flags are off" from "config never
+	// loaded" — the two default to the same false/false pair below, but only
+	// the first one is a real "nothing to render" claim.
+	let configLoaded = false;
 	let reactionKinds = pickReactionKinds(undefined);
 	let pageReactionKinds = reactionKinds;
 	// True by default, and read below as `!== false`, so a server older than this
@@ -3633,6 +3637,7 @@ const loadOnce = async (
 			: await fetchConfig(apiBase, langExplicit, langHint);
 		setFormTokenEnabled(formTokenWanted(cfg));
 		if (cfg) {
+			configLoaded = true;
 			// Install the locale before anything renders below. The table is the
 			// locale's own overrides, not a merged copy — makeS falls back to the
 			// bundled English per key, so a partial translation renders English
@@ -3756,9 +3761,14 @@ const loadOnce = async (
 		root.replaceChildren();
 		if (!pageReactionsEnabled && !pageVotesEnabled) {
 			// Nothing to show and nothing to fetch. One line for the operator
-			// wondering why the embed is empty; readers see nothing at all.
+			// wondering why the embed is empty; readers see nothing at all. Only
+			// blame the config when it actually loaded and said so — both flags
+			// also default to false when the config fetch itself failed, and
+			// that is a different problem than an operator's deliberate setting.
 			console.warn(
-				'[garrul] data-mode="reactions": page reactions and page votes are both off (PAGE_REACTIONS_ENABLED / PAGE_VOTES_ENABLED) — nothing to render',
+				configLoaded
+					? '[garrul] data-mode="reactions": page reactions and page votes are both off (PAGE_REACTIONS_ENABLED / PAGE_VOTES_ENABLED) — nothing to render'
+					: '[garrul] data-mode="reactions": config failed to load — nothing to render',
 			);
 			return;
 		}

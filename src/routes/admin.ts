@@ -138,7 +138,9 @@ import { issueTelegramLinkToken } from "./telegram";
 import { renderSettings } from "../admin-ui/pages/settings";
 import {
 	bustSettingsCache,
+	canonicalReactionKinds,
 	FLAG_KEYS,
+	isReactionKindsKey,
 	loadNumbers,
 	loadSettings,
 	NUMBER_KEYS,
@@ -1006,6 +1008,14 @@ admin.post("/settings", async (c) => {
 			const value = raw.trim();
 			if (value.length > textMax(key)) {
 				return c.json({ error: `text_too_long:${key}` }, 400);
+			}
+			if (isReactionKindsKey(key)) {
+				const kinds = canonicalReactionKinds(value);
+				if (!kinds) {
+					return c.json({ error: `invalid_reaction_kinds:${key}` }, 400);
+				}
+				writtenTexts[key] = kinds;
+				continue;
 			}
 			// An empty box means an empty list, not "inherit the env default" —
 			// an operator clearing a muted-words list has to be able to clear it.

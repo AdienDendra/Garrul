@@ -282,6 +282,10 @@ and the server-side gates. Leaving a flag untouched in the admin UI writes no
 row, so existing installs that only set env vars are unaffected.
 Implementation: `src/lib/settings.ts`.
 
+The reaction-kind lists (`comment_reaction_kinds`, `page_reaction_kinds`) are
+the one runtime setting with **no env var**. They live only in the `settings`
+table, and "Reset to defaults" restores the original six kinds.
+
 **Changing one of these by env var instead takes up to an hour.** The cache TTL
 is 1 hour (raised from 5 minutes: it's a fixed pair of KV keys that
 re-populate once per TTL window *per edge colo*, against a free-tier cap of 1000

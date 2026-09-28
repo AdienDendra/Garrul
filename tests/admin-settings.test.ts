@@ -447,6 +447,7 @@ describe("POST /admin/settings — reset", () => {
 		expect(del!.binds).toContain("auto_collapse_depth");
 		expect(del!.binds).toContain("default_locale");
 		expect(del!.binds).toContain("spam_blocklist");
+		expect(del!.binds).toContain("comment_reaction_kinds");
 
 		expect(kv.deletedKeys).toContain("settings:resolved");
 	});
@@ -471,5 +472,35 @@ describe("POST /admin/settings — gate", () => {
 		expect(res.status).toBe(403);
 		const json = (await res.json()) as { error: string };
 		expect(json.error).toBe("origin_mismatch");
+	});
+});
+
+describe("POST /admin/settings — reaction kind lists", () => {
+	it("stores the canonical list, folding repeats", async () => {
+		const { env, kv, runs } = mkEnv();
+		const res = await postSettings(env, {
+			texts: { comment_reaction_kinds: " rocket, fire ,rocket" },
+		});
+		expect(res.status).toBe(200);
+		expect(settingWrites(runs)).toContainEqual(["comment_reaction_kinds", "rocket,fire"]);
+		expect(kv.deletedKeys).toContain("settings:resolved");
+	});
+
+	it("rejects an unknown kind with 400 and writes nothing", async () => {
+		const { env, runs } = mkEnv();
+		const res = await postSettings(env, { texts: { page_reaction_kinds: "fire,like" } });
+		expect(res.status).toBe(400);
+		expect(await res.json()).toEqual({ error: "invalid_reaction_kinds:page_reaction_kinds" });
+		expect(settingWrites(runs)).toEqual([]);
+	});
+
+	// Unlike the muted-words list, empty is not a value here: a surface with no
+	// kinds is what the reactions_enabled / page_reactions_enabled flags are for.
+	it("rejects an empty list", async () => {
+		const { env, runs } = mkEnv();
+		const res = await postSettings(env, { texts: { comment_reaction_kinds: "" } });
+		expect(res.status).toBe(400);
+		expect(await res.json()).toEqual({ error: "invalid_reaction_kinds:comment_reaction_kinds" });
+		expect(settingWrites(runs)).toEqual([]);
 	});
 });

@@ -24,6 +24,7 @@ import type { Bindings } from "../index";
 import { COMMENT_SORTS, getAllSettings } from "../db/queries";
 import { LOCALES } from "../i18n";
 import { AUTO_LOCALE } from "../i18n/negotiate";
+import { DEFAULT_REACTION_KINDS, REACTION_KIND_SET } from "../widget/reactions";
 import { MAX_DEPTH } from "./tree";
 
 export type FlagKey =
@@ -62,10 +63,18 @@ export type StringSettingKey = "default_locale" | "default_sort";
 
 export type ResolvedStrings = Record<StringSettingKey, string>;
 
+/** The two ordered-list text settings: which reaction kinds each surface offers. */
+export const REACTION_KINDS_KEYS = [
+	"comment_reaction_kinds",
+	"page_reaction_kinds",
+] as const;
+export type ReactionKindsKey = (typeof REACTION_KINDS_KEYS)[number];
+
 export type TextSettingKey =
 	| "spam_blocklist"
 	| "security_contact"
-	| "staff_badge_label";
+	| "staff_badge_label"
+	| ReactionKindsKey;
 
 export type ResolvedTexts = Record<TextSettingKey, string>;
 
@@ -398,9 +407,55 @@ const TEXTS: Record<
 	// presentation, set from the Settings page, and a deploy-time default would
 	// cost an env name across every install doc for no operator benefit.
 	staff_badge_label: { default: "", max: STAFF_BADGE_LABEL_MAX },
+	// Which reaction kinds each surface offers, in render order, as a
+	// comma-separated list of vocabulary kinds (src/widget/reactions.ts).
+	// Stored raw like the rest of this group and normalized at use by
+	// `reactionKinds`, so a row naming a kind a later release drops still
+	// resolves to the kinds that remain.
+	//
+	// No env var, deliberately: an env name costs a config-registry entry, a
+	// manifest bump and a docs-gate update, for a list nobody pins per deploy.
+	// The Settings page is the only writer and Reset restores the default —
+	// the six kinds every install shipped with, so an upgrade renders exactly
+	// what it rendered before.
+	comment_reaction_kinds: { default: DEFAULT_REACTION_KINDS.join(",") },
+	page_reaction_kinds: { default: DEFAULT_REACTION_KINDS.join(",") },
 };
 
 export const TEXT_KEYS = Object.keys(TEXTS) as TextSettingKey[];
+
+export const isReactionKindsKey = (key: string): key is ReactionKindsKey =>
+	(REACTION_KINDS_KEYS as readonly string[]).includes(key);
+
+/**
+ * Save-path check for a reaction-kind list. Strict, like the string
+ * whitelist: every entry must be a known kind and there must be at least
+ * one. A stale admin page must not quietly save a different list than the
+ * one it shows. Repeats are folded rather than rejected — they are harmless
+ * and the chip UI can't produce them. Returns the canonical form, or null.
+ */
+export const canonicalReactionKinds = (raw: string): string | null => {
+	const parts = raw.split(",").map((k) => k.trim());
+	if (parts.some((k) => !REACTION_KIND_SET.has(k))) return null;
+	return [...new Set(parts)].join(",");
+};
+
+/**
+ * The enabled kinds for one surface, in the operator's order. Lenient,
+ * because a resolver has nobody to report to: unknown kinds and repeats are
+ * dropped, and an empty result means the default. `undefined` is a real
+ * input — a settings blob cached by the previous release has no such key.
+ */
+export const reactionKinds = (
+	texts: ResolvedTexts,
+	key: ReactionKindsKey,
+): string[] => {
+	const raw = (texts[key] as string | undefined) ?? "";
+	const kinds = [...new Set(raw.split(",").map((k) => k.trim()))].filter((k) =>
+		REACTION_KIND_SET.has(k),
+	);
+	return kinds.length > 0 ? kinds : [...DEFAULT_REACTION_KINDS];
+};
 
 /** Per-key length cap for a text setting (save path rejects, resolver truncates). */
 export const textMax = (key: TextSettingKey): number =>
@@ -701,10 +756,10 @@ export const loadStrings = async (env: Bindings): Promise<ResolvedStrings> =>
 /**
  * Resolved free-form text settings.
  *
- * Deliberately *not* exposed through `GET /api/v1/config`: the muted-words list
- * is moderation policy, and handing it to the widget would publish the operator's
- * blocklist to anyone who can read a network tab — which is a map of exactly what
- * to avoid typing.
+ * Not exposed through `GET /api/v1/config` as a group. The muted-words list is
+ * moderation policy and must not reach a network tab — it is a map of exactly
+ * what to avoid typing. The config route serves only the two reaction-kind
+ * lists, which are derived arrays.
  */
 export const loadTexts = async (env: Bindings): Promise<ResolvedTexts> =>
 	(await loadSettings(env)).texts;

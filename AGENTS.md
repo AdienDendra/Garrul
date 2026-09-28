@@ -535,6 +535,18 @@ writing a comment. Both surfaces default **off** and are server-gated:
   that". Per-comment reactions stay compact — same label, but as the
   button's accessible name rather than visible text.
 
+### Configurable reaction kinds (since v2.30.0)
+
+- Admin → Settings → Features picks which kinds each surface offers and in
+  what order: `comment_reaction_kinds` and `page_reaction_kinds`, any 1–12 of
+  the vocabulary. Default: `fire,love,wow,laugh,hmm,cry` — an upgrade renders
+  exactly what it did before. DB-only settings: there is no env var.
+- `GET /api/v1/config` (and bootstrap's `config`) carries
+  `reaction_kinds: string[]` and `page_reaction_kinds: string[]`.
+- Both POST routes answer `400 invalid_kind` for a kind outside that
+  surface's list. Rows of a disabled kind are kept; read endpoints still
+  return their counts, and the widget renders only enabled kinds.
+
 ### Subscribing to a thread (since v2.10.0)
 
 A reader can follow a thread by email in two places, both server-gated

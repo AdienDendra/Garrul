@@ -30,11 +30,9 @@ import { requireIpHash } from "../lib/ip-hash";
 import { checkRateLimit } from "../lib/ratelimit";
 import { readSession } from "../lib/session";
 import { writeEvent } from "../lib/analytics";
-import { loadFlags } from "../lib/settings";
+import { loadFlags, loadSettings, reactionKinds } from "../lib/settings";
 import { FALLBACK_LOCALE, tFor } from "../i18n";
 import type { LocaleVars } from "../lib/locale";
-// Shared with the comment-level route and the widget — see ../widget/reactions.
-import { REACTION_KIND_SET } from "../widget/reactions";
 
 const pageEngagement = new Hono<{ Bindings: Bindings; Variables: LocaleVars }>();
 
@@ -107,7 +105,7 @@ type ReactionBody = { slug?: string; kind?: string };
 
 pageEngagement.post("/reactions", async (c) => {
 	const t = c.get("t") ?? tFor(FALLBACK_LOCALE);
-	const flags = await loadFlags(c.env);
+	const { flags, texts } = await loadSettings(c.env);
 	if (!flags.page_reactions_enabled) {
 		return c.json({ error: "page_reactions_disabled" }, 403);
 	}
@@ -118,7 +116,10 @@ pageEngagement.post("/reactions", async (c) => {
 	const slug = validateSlug(body.slug ?? "");
 	if (!slug) return c.json({ error: t("err.post.invalid") }, 400);
 	const kind = (body.kind ?? "").trim();
-	if (!REACTION_KIND_SET.has(kind))
+	// The operator's enabled list, not the whole vocabulary: a kind turned off
+	// in Settings has no button, so a POST for it is a script, not a reader.
+	// Its stored rows are left alone and still counted on read.
+	if (!reactionKinds(texts, "page_reaction_kinds").includes(kind))
 		return c.json({ error: "invalid_kind" }, 400);
 
 	const ipHash = await requireIpHash(c);

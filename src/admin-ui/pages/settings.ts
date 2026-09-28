@@ -505,6 +505,8 @@ export const renderSettings = (
       …); "Reset to defaults" clears the overrides so the env vars / built-in
       defaults apply again.</p>
       ${toggles}
+      <input type="hidden" name="comment_reaction_kinds" x-model="texts.comment_reaction_kinds">
+      <input type="hidden" name="page_reaction_kinds" x-model="texts.page_reaction_kinds">
     </div>
 
     <div class="card" x-show="tab === 'display'" x-cloak>

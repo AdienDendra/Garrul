@@ -861,9 +861,9 @@ describe("renderSettings field-name contract", () => {
 
 	it("does not emit a settings input bound to an unknown key", () => {
 		// Catches a stray control whose name isn't in the whitelist (would be
-		// silently dropped by the handler). Every checkbox/number input name
-		// must be a known flag or number key.
-		const known = new Set<string>([...FLAG_KEYS, ...NUMBER_KEYS]);
+		// silently dropped by the handler). Every checkbox/number/hidden input
+		// name must be a known flag, number or text key.
+		const known = new Set<string>([...FLAG_KEYS, ...NUMBER_KEYS, ...TEXT_KEYS]);
 		const inputNames = [
 			...html.matchAll(/<input\b[^>]*\bname="([^"]+)"/g),
 		].map((m) => m[1]!);

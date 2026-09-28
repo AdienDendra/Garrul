@@ -264,6 +264,20 @@ describe("POST /reactions — only the operator's enabled kinds", () => {
 		expect(res.status).toBe(200);
 	});
 
+	// Deliberate: once a kind is off, its button is gone, so the same POST that
+	// would toggle an earlier reaction off is refused too. The row stays counted.
+	it("400s toggling off a kind the operator disabled after it was used", async () => {
+		installMockCaches();
+		const settings: Record<string, string> = { comment_reaction_kinds: "rocket" };
+		const { app, env } = mkApp("approved", settings);
+		const body = { comment_id: COMMENT_ID, kind: "rocket" };
+		expect((await post(app, env, body)).status).toBe(200);
+		settings.comment_reaction_kinds = "fire";
+		const res = await post(app, env, body);
+		expect(res.status).toBe(400);
+		expect(((await res.json()) as { error: string }).error).toBe("invalid_kind");
+	});
+
 	it("does not consult the page list", async () => {
 		const { app, env } = mkApp("approved", { page_reaction_kinds: "rocket" });
 		const res = await post(app, env, { comment_id: COMMENT_ID, kind: "rocket" });

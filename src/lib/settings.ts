@@ -725,7 +725,17 @@ export const loadSettings = async (
 	const cached = await env.TREE_CACHE.get(CACHE_KEY_RESOLVED, "json").catch(
 		() => null,
 	);
-	if (isResolvedSettings(cached)) return cached;
+	if (isResolvedSettings(cached)) {
+		// A blob cached by the previous release lacks any text key added since.
+		// It lives up to the TTL after a deploy, so fill the gaps with defaults
+		// here, once, rather than make every caller tolerate `undefined`.
+		for (const key of TEXT_KEYS) {
+			if (typeof cached.texts[key] !== "string") {
+				(cached.texts as Record<string, string>)[key] = TEXTS[key].default;
+			}
+		}
+		return cached;
+	}
 	if (inFlight) return inFlight;
 	const pending = deriveSettings(env).finally(() => {
 		inFlight = null;

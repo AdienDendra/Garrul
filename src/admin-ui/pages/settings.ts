@@ -11,7 +11,9 @@ import {
 	MAX_TEXT_SETTING_CHARS,
 	STAFF_BADGE_LABEL_MAX,
 	TEXT_KEYS,
+	isReactionKindsKey,
 	numberBounds,
+	reactionKinds,
 } from "../../lib/settings";
 import {
 	MAX_TERMS,
@@ -420,7 +422,10 @@ export const renderSettings = (
 	// x-data blob — JSON.stringify leaves U+2028/U+2029 raw, and those are line
 	// terminators that end the string literal inside the Alpine expression.
 	const textInitial = `{${TEXT_KEYS.map(
-		(k) => `${jsLiteralRaw(k)}:${jsLiteralRaw(texts[k])}`,
+		// Reaction lists seed from the lenient read, not the raw row: one junk
+		// stored kind would otherwise fail every unrelated save with a 400.
+		(k) =>
+			`${jsLiteralRaw(k)}:${jsLiteralRaw(isReactionKindsKey(k) ? reactionKinds(texts, k).join(",") : texts[k])}`,
 	).join(",")}}`;
 
 	return `

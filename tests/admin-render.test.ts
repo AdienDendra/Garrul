@@ -38,6 +38,7 @@ import {
 	type ResolvedStrings,
 	STRING_KEYS,
 	type ResolvedTexts,
+	isReactionKindsKey,
 	TEXT_KEYS,
 	stringDefault,
 	stringOptions,
@@ -778,6 +779,9 @@ describe("renderSettings field-name contract", () => {
 	});
 
 	it("seeds every text key into Alpine state so save() round-trips it", () => {
+		// Reaction lists seed through the lenient read, so they need a real kind.
+		const seedFor = (k: string) =>
+			isReactionKindsKey(k) ? "rocket" : "seeded-value";
 		// A textarea whose key is missing from the seed binds to undefined, and
 		// save() then posts `undefined` — the handler skips it, so the operator's
 		// edit vanishes with a "Settings saved" toast.
@@ -786,12 +790,10 @@ describe("renderSettings field-name contract", () => {
 			flags,
 			numbers,
 			strings,
-			Object.fromEntries(
-				TEXT_KEYS.map((k) => [k, "seeded-value"]),
-			) as ResolvedTexts,
+			Object.fromEntries(TEXT_KEYS.map((k) => [k, seedFor(k)])) as ResolvedTexts,
 		);
 		for (const key of TEXT_KEYS) {
-			expect(seeded).toContain(`&quot;${key}&quot;:&quot;seeded-value&quot;`);
+			expect(seeded).toContain(`&quot;${key}&quot;:&quot;${seedFor(key)}&quot;`);
 		}
 		expect(seeded).toContain("texts: this.texts");
 	});

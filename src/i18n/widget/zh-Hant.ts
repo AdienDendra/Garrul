@@ -34,6 +34,7 @@ export const zhHant = {
 	"w.email_ph": "you@example.com",
 	"w.email_label": "電子郵件地址",
 	"w.notify": "有新留言時以電子郵件通知我",
+	"w.post_as_staff": "以工作人員身分發表",
 	"w.post_comment": "發佈留言",
 	"w.post_reply": "發佈回覆",
 	"w.reply_ph": "回覆 @{name}…",
@@ -55,6 +56,7 @@ export const zhHant = {
 	// ── A comment ───────────────────────────────────────────────────────────
 	"w.verified": "已驗證",
 	"w.pinned": "置頂",
+	"w.staff": "工作人員",
 	"w.edited": "· 已編輯",
 	"w.pending": "等待核准",
 	"w.removed_by_mod": "[版主已移除此留言]",

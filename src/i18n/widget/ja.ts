@@ -64,6 +64,7 @@ export const ja = {
 	"w.email_ph": "you@example.com",
 	"w.email_label": "メールアドレス",
 	"w.notify": "新しいコメントをメールで受け取る",
+	"w.post_as_staff": "スタッフとして投稿",
 	"w.post_comment": "コメントを投稿",
 	"w.post_reply": "返信を投稿",
 	// No さん after {name}: it is arbitrary user text and may already carry a
@@ -89,6 +90,7 @@ export const ja = {
 	// ── A comment ───────────────────────────────────────────────────────────
 	"w.verified": "確認済み",
 	"w.pinned": "固定",
+	"w.staff": "スタッフ",
 	"w.edited": "· 編集済み",
 	"w.pending": "承認待ち",
 	"w.removed_by_mod": "[モデレーターにより削除されました]",

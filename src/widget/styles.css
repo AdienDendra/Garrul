@@ -395,6 +395,9 @@ button:active:not([disabled]) { opacity: 0.75; }
 .gr-honeypot { position: absolute; left: -9999px; top: -9999px; }
 .gr-form .gr-notify { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9em; cursor: pointer; }
 .gr-form .gr-notify .gr-notify-cb { width: auto; }
+/* Reply forms are not .gr-form, so the staff toggle is styled unscoped. */
+.gr-staff-toggle { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9em; cursor: pointer; }
+.gr-staff-toggle .gr-staff-cb { width: auto; }
 .gr-form .gr-email-input[hidden] { display: none; }
 /* The slot sits empty until the visitor focuses the composer and the frame
    mounts. As a flex child of .gr-form (gap: 0.5rem) an empty div still
@@ -495,7 +498,8 @@ button:active:not([disabled]) { opacity: 0.75; }
 .gr-meta { display: flex; gap: 0.5rem; align-items: baseline; flex-wrap: wrap; }
 .gr-name { font-weight: 600; }
 .gr-verified,
-.gr-pinned {
+.gr-pinned,
+.gr-staff {
 	background: var(--gr-badge-bg);
 	color: var(--gr-badge-fg);
 	font-size: 0.75em;

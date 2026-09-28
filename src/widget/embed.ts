@@ -120,6 +120,28 @@ let maxBodyChars = 10_000;
 /** How close to the ceiling the counter appears. Silent above this. */
 const COUNT_WARN_AT = 500;
 
+/** Operator override for the staff badge (config `staff_badge_label`); null = locale string. */
+let staffLabel: string | null = null;
+
+const isStaff = (me: Me): boolean => me?.role === "mod" || me?.role === "admin";
+
+/** Unchecked by default: a mod's comment is a reader's comment unless they say otherwise. */
+const buildStaffToggle = (): HTMLLabelElement => {
+	const wrap = el("label", "gr-staff-toggle");
+	const cb = el("input");
+	cb.type = "checkbox";
+	cb.className = "gr-staff-cb";
+	cb.name = "as_staff";
+	wrap.append(cb, document.createTextNode(` ${s("w.post_as_staff")}`));
+	return wrap;
+};
+
+/** The POST fragment for the toggle inside `scope`; empty when absent or unchecked. */
+const asStaffField = (scope: ParentNode): { as_staff?: true } =>
+	(scope.querySelector(".gr-staff-cb") as HTMLInputElement | null)?.checked
+		? { as_staff: true }
+		: {};
+
 /** Counter backing `nextId` — one sequence for every generated element id. */
 let idCounter = 0;
 
@@ -193,6 +215,8 @@ type Me = {
 	email: string | null;
 	avatar_url: string | null;
 	is_admin: boolean;
+	/** From /auth/me (publicUser). Gates the post-as-staff box; the server re-checks. */
+	role?: "user" | "mod" | "admin";
 } | null;
 
 
@@ -2149,6 +2173,7 @@ const buildReplyForm = (parent: TreeNode, ctx: WidgetCtx): HTMLElement => {
 		nameInput.required = true;
 		wrap.appendChild(nameInput);
 	}
+	if (isStaff(ctx.me)) wrap.appendChild(buildStaffToggle());
 	wrap.appendChild(buildWritePreview(ta, ctx.apiBase, true));
 
 	// Honeypot: mirrors the top-level form's anti-spam input. Hidden offscreen
@@ -2323,6 +2348,7 @@ const buildReplyForm = (parent: TreeNode, ctx: WidgetCtx): HTMLElement => {
 					turnstile_token: turnstileToken,
 					website: honey.value,
 					form_ts: formTs,
+					...asStaffField(wrap),
 					...postMetaFromDataset(ctx.host.dataset),
 				}),
 			});
@@ -2408,6 +2434,8 @@ const buildComment = (n: TreeNode, ctx: WidgetCtx): HTMLElement => {
 		meta.appendChild(el("span", "gr-verified", s("w.verified")));
 	}
 	if (n.pinned) meta.appendChild(el("span", "gr-pinned", s("w.pinned")));
+	// textContent via el(): the label is operator text and never parsed as HTML.
+	if (n.staff) meta.appendChild(el("span", "gr-staff", staffLabel ?? s("w.staff")));
 	// The timestamp is the permalink, the way Reddit/HN/Disqus do it — a plain
 	// anchor, so right-click-copy, middle-click and Cmd-click all work natively
 	// and we spend no bytes on a clipboard shim. Clicking it is handled by the
@@ -2735,6 +2763,8 @@ const buildForm = (
 	// Operator opted into challenging signed-in commenters too, so the Turnstile
 	// slot is no longer implied by `!signedIn` alone.
 	turnstileAlways: boolean,
+	// Session role is mod/admin: offer the opt-in staff box. The server re-checks.
+	staffEligible: boolean,
 ): HTMLFormElement => {
 	const form = document.createElement("form");
 	form.className = "gr-form";
@@ -2831,6 +2861,8 @@ const buildForm = (
 		tsSlot.setAttribute("aria-label", s("w.ts.title"));
 		form.appendChild(tsSlot);
 	}
+
+	if (staffEligible) form.appendChild(buildStaffToggle());
 
 	const submit = el("button", undefined, s("w.post_comment"));
 	submit.type = "submit";
@@ -3604,6 +3636,10 @@ const loadOnce = async (
 			// the over-limit state.
 			if (typeof cfg.max_body_chars === "number" && cfg.max_body_chars > 0)
 				maxBodyChars = cfg.max_body_chars;
+			staffLabel =
+				typeof cfg.staff_badge_label === "string" && cfg.staff_badge_label
+					? cfg.staff_badge_label
+					: null;
 			providers = (cfg.providers ?? []).filter((p): p is OAuthProvider =>
 				// biome-ignore lint/suspicious/noPrototypeBuiltins: the rule wants Object.hasOwn (ES2022); the widget builds for es2020 and esbuild will not polyfill it. This is already the safe `.call` form.
 				Object.prototype.hasOwnProperty.call(PROVIDER_LABELS, p),
@@ -3755,6 +3791,7 @@ const loadOnce = async (
 		subscriptionsEnabled,
 		me?.email ?? null,
 		turnstileAlways,
+		isStaff(me),
 	);
 	// Restore/persist the top-level composer draft (cleared on successful post
 	// in submit()). Reply-form drafts are wired separately in buildReplyForm.
@@ -4147,6 +4184,7 @@ const submit = async (
 				turnstile_token: turnstileToken,
 				website: honeypot,
 				form_ts: formTs,
+				...asStaffField(form),
 				...postMetaFromDataset(host.dataset),
 			}),
 		});

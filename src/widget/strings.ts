@@ -74,6 +74,7 @@ export const EN = {
 	// wording ("on new replies") promised per-reply scoping the schema does not
 	// have; say what actually arrives rather than under-deliver on the label.
 	"w.notify": "Email me about new comments",
+	"w.post_as_staff": "Post as staff",
 	"w.post_comment": "Post comment",
 	"w.post_reply": "Post reply",
 	"w.reply_ph": "Reply to @{name}…",
@@ -97,6 +98,7 @@ export const EN = {
 	// ── A comment ───────────────────────────────────────────────────────────
 	"w.verified": "verified",
 	"w.pinned": "pinned",
+	"w.staff": "Staff",
 	"w.edited": "· edited",
 	"w.pending": "Pending approval",
 	"w.removed_by_mod": "[removed by a moderator]",

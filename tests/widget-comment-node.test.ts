@@ -182,6 +182,22 @@ describe("topLevelPlacement", () => {
 	});
 });
 
+describe("staff marker", () => {
+	it("readPostedEcho keeps staff: true and synthesizePosted carries it", () => {
+		const read = readPostedEcho({ ...echo(), staff: true });
+		expect(read?.staff).toBe(true);
+		expect(synthesizePosted(read!, null).node.staff).toBe(true);
+	});
+
+	it("drops a missing or non-true staff value", () => {
+		for (const staff of [undefined, false, "true", 1]) {
+			const read = readPostedEcho({ ...echo(), staff });
+			expect(read).not.toHaveProperty("staff");
+			expect(synthesizePosted(read!, null).node).not.toHaveProperty("staff");
+		}
+	});
+});
+
 describe("readPostedEcho", () => {
 	const body = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
 		id: "c1",

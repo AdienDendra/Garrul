@@ -66,6 +66,7 @@ export type ConfigResponse = {
 	community_min_votes?: number;
 	community_collapse_ratio?: number;
 	form_token_enabled?: boolean;
+	staff_badge_label?: string | null;
 	locale?: string;
 	strings?: Record<string, string | Record<string, string>>;
 	rtl?: boolean;

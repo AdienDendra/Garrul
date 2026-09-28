@@ -61,6 +61,7 @@ export const it = {
 	"w.email_ph": "nome@example.com",
 	"w.email_label": "Indirizzo email",
 	"w.notify": "Inviami un'email sui nuovi commenti",
+	"w.post_as_staff": "Pubblica come staff",
 	"w.post_comment": "Pubblica commento",
 	"w.post_reply": "Pubblica risposta",
 	"w.reply_ph": "Rispondi a @{name}…",
@@ -84,6 +85,7 @@ export const it = {
 	// ── A comment ───────────────────────────────────────────────────────────
 	"w.verified": "verificato",
 	"w.pinned": "fissato",
+	"w.staff": "Staff",
 	"w.edited": "· modificato",
 	"w.pending": "In attesa di approvazione",
 	"w.removed_by_mod": "[rimosso da un moderatore]",

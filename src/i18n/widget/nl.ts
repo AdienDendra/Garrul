@@ -57,6 +57,7 @@ export const nl = {
 	// First person ("mij"), not second — it keeps the checkbox out of the u/je
 	// choice while still reading as the reader's own request.
 	"w.notify": "Mij e-mailen bij nieuwe reacties",
+	"w.post_as_staff": "Plaatsen als team",
 	"w.post_comment": "Reactie plaatsen",
 	"w.post_reply": "Antwoord plaatsen",
 	"w.reply_ph": "Antwoord aan @{name}…",
@@ -80,6 +81,7 @@ export const nl = {
 	// ── A comment ───────────────────────────────────────────────────────────
 	"w.verified": "geverifieerd",
 	"w.pinned": "vastgezet",
+	"w.staff": "Team",
 	"w.edited": "· bewerkt",
 	"w.pending": "Wacht op goedkeuring",
 	"w.removed_by_mod": "[verwijderd door een moderator]",

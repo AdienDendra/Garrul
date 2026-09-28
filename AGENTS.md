@@ -796,6 +796,9 @@ see AGENTS-OPERATE.md §5) control the volume:
   comment its author chose to mark reveals a role. Edits never change the
   mark; demoting the author to `user` clears all of theirs (cached pages
   catch up within 60 s).
+  The widget shows it as a `.gr-staff` pill beside the name, worded by the
+  operator's `staff_badge_label` (config; null → the locale's `w.staff`).
+  Signed-in mods/admins get an unchecked *Post as staff* box in both composers.
 
 Reply collapsing is **purely client-side** — the replies arrive in the single
 list response and the widget folds them. There is no `data-*` per-page

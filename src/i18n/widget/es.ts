@@ -41,6 +41,7 @@ export const es = {
 	// lookalike would be somebody's real domain.
 	"w.email_ph": "nombre@example.com",
 	"w.notify": "Avisarme por correo de nuevos comentarios",
+	"w.post_as_staff": "Publicar como equipo",
 	"w.post_comment": "Publicar comentario",
 	"w.post_reply": "Publicar respuesta",
 	"w.reply_ph": "Responder a @{name}…",
@@ -63,6 +64,7 @@ export const es = {
 	// ── A comment ───────────────────────────────────────────────────────────
 	"w.verified": "verificado",
 	"w.pinned": "fijado",
+	"w.staff": "Equipo",
 	"w.edited": "· editado",
 	"w.pending": "Pendiente de aprobación",
 	"w.removed_by_mod": "[eliminado por un moderador]",

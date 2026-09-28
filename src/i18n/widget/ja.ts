@@ -122,6 +122,12 @@ export const ja = {
 	"w.react.laugh": "面白い",
 	"w.react.hmm": "うーん",
 	"w.react.cry": "悲しい",
+	"w.react.thumbsup": "賛成",
+	"w.react.party": "おめでとう",
+	"w.react.eyes": "注目",
+	"w.react.thanks": "感謝",
+	"w.react.rocket": "ワクワク",
+	"w.react.hundred": "その通り",
 
 	// ── The thread ──────────────────────────────────────────────────────────
 	"w.replies": { other: "{n}件の返信" },

@@ -98,6 +98,12 @@ export const de = {
 	"w.react.laugh": "Lustig",
 	"w.react.hmm": "Hmm",
 	"w.react.cry": "Traurig",
+	"w.react.thumbsup": "Stimmt",
+	"w.react.party": "Hurra",
+	"w.react.eyes": "Gespannt",
+	"w.react.thanks": "Danke",
+	"w.react.rocket": "Spannend",
+	"w.react.hundred": "Genau",
 
 	// ── The thread ──────────────────────────────────────────────────────────
 	"w.replies": { one: "{n} Antwort", other: "{n} Antworten" },

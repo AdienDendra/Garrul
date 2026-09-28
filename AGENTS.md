@@ -435,7 +435,10 @@ and a sort selector above the list. Neither needs any host-page wiring:
 - **Anonymous viewers can vote.** They use the same IP-hashed ghost
   identity as anonymous comments — one vote per identity per comment.
   Authors cannot vote on their own comments.
-- **Reaction kinds** are `fire|love|wow|laugh|hmm|cry` (🔥❤️😮😂🤔😢).
+- **Reaction kinds** are `fire|love|wow|laugh|hmm|cry` (🔥❤️😮😂🤔😢) by
+  default, plus six opt-in kinds `thumbsup|party|eyes|thanks|rocket|hundred`
+  (👍🎉👀🙏🚀💯, since v2.30.0) that an operator enables per surface — see
+  *Configurable reaction kinds*.
   **Changed in v2.10.0:** `like` 👍 was renamed to `fire` 🔥 (it duplicated
   the up-vote sitting directly below it) and `wow` was added. Migration
   0022 rewrites stored rows in both `reactions` and `page_reactions`, so

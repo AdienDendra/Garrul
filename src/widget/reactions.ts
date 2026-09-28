@@ -56,12 +56,33 @@ export const REACTION_KINDS: readonly ReactionKind[] = [
 	{ kind: "laugh", emoji: "😂", labelKey: "w.react.laugh" },
 	{ kind: "hmm", emoji: "🤔", labelKey: "w.react.hmm" },
 	{ kind: "cry", emoji: "😢", labelKey: "w.react.cry" },
+	// Opt-in kinds (v2.30.0): off until an operator enables them per surface
+	// (settings `comment_reaction_kinds` / `page_reaction_kinds`). `thumbsup`
+	// is deliberately not `like` — that spelling was retired in v2.24.0 and
+	// must keep answering 400. It is also not a default, because 👍 beside the
+	// up-vote is the duplication v2.10.0 removed.
+	{ kind: "thumbsup", emoji: "👍", labelKey: "w.react.thumbsup" },
+	{ kind: "party", emoji: "🎉", labelKey: "w.react.party" },
+	{ kind: "eyes", emoji: "👀", labelKey: "w.react.eyes" },
+	{ kind: "thanks", emoji: "🙏", labelKey: "w.react.thanks" },
+	{ kind: "rocket", emoji: "🚀", labelKey: "w.react.rocket" },
+	{ kind: "hundred", emoji: "💯", labelKey: "w.react.hundred" },
 ];
 
 /** Membership test for the routes, derived so it cannot drift from the list. */
 export const REACTION_KIND_SET: ReadonlySet<string> = new Set(
 	REACTION_KINDS.map((r) => r.kind),
 );
+
+/**
+ * The list a surface offers when nothing else is configured: the six kinds
+ * every install shipped with, in their original order. The server's setting
+ * default and the widget's fallback for a pre-list server both read this, so
+ * an upgrade is a no-op on screen.
+ */
+export const DEFAULT_REACTION_KINDS: readonly string[] = [
+	"fire", "love", "wow", "laugh", "hmm", "cry",
+];
 
 /**
  * Fold a toggle response back into a comment's reaction list.

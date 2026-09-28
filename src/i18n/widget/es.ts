@@ -95,6 +95,12 @@ export const es = {
 	"w.react.laugh": "Divertido",
 	"w.react.hmm": "Mmm",
 	"w.react.cry": "Triste",
+	"w.react.thumbsup": "De acuerdo",
+	"w.react.party": "Hurra",
+	"w.react.eyes": "Atento",
+	"w.react.thanks": "Gracias",
+	"w.react.rocket": "Emocionante",
+	"w.react.hundred": "Exacto",
 
 	// ── The thread ──────────────────────────────────────────────────────────
 	"w.replies": { one: "{n} respuesta", other: "{n} respuestas" },

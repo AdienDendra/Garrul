@@ -97,6 +97,12 @@ export const fr = {
 	"w.react.laugh": "Drôle",
 	"w.react.hmm": "Hmm",
 	"w.react.cry": "Triste",
+	"w.react.thumbsup": "D'accord",
+	"w.react.party": "Youpi",
+	"w.react.eyes": "À suivre",
+	"w.react.thanks": "Merci",
+	"w.react.rocket": "Palpitant",
+	"w.react.hundred": "Exactement",
 
 	// ── The thread ──────────────────────────────────────────────────────────
 	"w.replies": { one: "{n} réponse", other: "{n} réponses" },

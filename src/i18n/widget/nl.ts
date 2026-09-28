@@ -120,6 +120,12 @@ export const nl = {
 	"w.react.hmm": "Hmm",
 	// "Triest" over the longer "Verdrietig" — six of these share one row.
 	"w.react.cry": "Triest",
+	"w.react.thumbsup": "Eens",
+	"w.react.party": "Hoera",
+	"w.react.eyes": "Benieuwd",
+	"w.react.thanks": "Bedankt",
+	"w.react.rocket": "Spannend",
+	"w.react.hundred": "Precies",
 
 	// ── The thread ──────────────────────────────────────────────────────────
 	"w.replies": { one: "{n} antwoord", other: "{n} antwoorden" },

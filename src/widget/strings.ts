@@ -132,8 +132,8 @@ export const EN = {
 	"w.page.up": "Upvote this page",
 	"w.page.down": "Downvote this page",
 	"w.page.react_prompt": "What's your reaction?",
-	// One word each: these sit under a 🔥-sized emoji in a six-across row on the
-	// article bar, and double as the accessible name of the compact per-comment
+	// One word each: these sit under a 🔥-sized emoji in a row of up to twelve on
+	// the article bar, and double as the accessible name of the compact per-comment
 	// button. A phrase wraps and breaks the grid. The emoji carries the tone; the
 	// label only has to disambiguate it (🤔 is "Hmm", not "I doubt that").
 	"w.react.fire": "Brilliant",
@@ -142,6 +142,12 @@ export const EN = {
 	"w.react.laugh": "Funny",
 	"w.react.hmm": "Hmm",
 	"w.react.cry": "Sad",
+	"w.react.thumbsup": "Agree",
+	"w.react.party": "Hooray",
+	"w.react.eyes": "Watching",
+	"w.react.thanks": "Thanks",
+	"w.react.rocket": "Exciting",
+	"w.react.hundred": "Exactly",
 
 	// ── The thread ──────────────────────────────────────────────────────────
 	"w.replies": { one: "{n} reply", other: "{n} replies" },

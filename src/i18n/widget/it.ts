@@ -120,6 +120,12 @@ export const it = {
 	// explicitly rules out. "Hmm" reads the same way in Italian.
 	"w.react.hmm": "Hmm",
 	"w.react.cry": "Triste",
+	"w.react.thumbsup": "D'accordo",
+	"w.react.party": "Evviva",
+	"w.react.eyes": "Da seguire",
+	"w.react.thanks": "Grazie",
+	"w.react.rocket": "Emozionante",
+	"w.react.hundred": "Esatto",
 
 	// ── The thread ──────────────────────────────────────────────────────────
 	"w.replies": { one: "{n} risposta", other: "{n} risposte" },

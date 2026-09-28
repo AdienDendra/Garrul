@@ -140,6 +140,12 @@ export const pt = {
 	"w.react.laugh": "Engraçado",
 	"w.react.hmm": "Hmm",
 	"w.react.cry": "Triste",
+	"w.react.thumbsup": "Concordo",
+	"w.react.party": "Viva",
+	"w.react.eyes": "Atento",
+	"w.react.thanks": "Obrigado",
+	"w.react.rocket": "Empolgante",
+	"w.react.hundred": "Exato",
 
 	// ── The thread ──────────────────────────────────────────────────────────
 	"w.replies": { one: "{n} resposta", other: "{n} respostas" },

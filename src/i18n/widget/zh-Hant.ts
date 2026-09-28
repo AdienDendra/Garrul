@@ -86,6 +86,12 @@ export const zhHant = {
 	"w.react.laugh": "好笑",
 	"w.react.hmm": "思考",
 	"w.react.cry": "難過",
+	"w.react.thumbsup": "贊同",
+	"w.react.party": "慶祝",
+	"w.react.eyes": "關注",
+	"w.react.thanks": "感謝",
+	"w.react.rocket": "期待",
+	"w.react.hundred": "正是",
 
 	// ── The thread ──────────────────────────────────────────────────────────
 	"w.replies": { other: "{n} 則回覆" },

@@ -9,6 +9,7 @@
  */
 import { describe, it, expect } from "vitest";
 import {
+	DEFAULT_REACTION_KINDS,
 	REACTION_KINDS,
 	REACTION_KIND_SET,
 	mergeReactionTotals,
@@ -86,5 +87,20 @@ describe("the vocabulary", () => {
 		// the duplication.
 		expect(REACTION_KIND_SET.has("like")).toBe(false);
 		expect(REACTION_KIND_SET.has("fire")).toBe(true);
+	});
+
+	it("appends the six opt-in kinds after the original six", () => {
+		// Order is render order, and the original six must stay first and in
+		// place: they are the default list, so an upgrade renders what it did.
+		expect(REACTION_KINDS.map((r) => r.kind)).toEqual([
+			"fire", "love", "wow", "laugh", "hmm", "cry",
+			"thumbsup", "party", "eyes", "thanks", "rocket", "hundred",
+		]);
+	});
+
+	it("defaults to the six kinds every install shipped with", () => {
+		expect(DEFAULT_REACTION_KINDS).toEqual(
+			REACTION_KINDS.slice(0, 6).map((r) => r.kind),
+		);
 	});
 });

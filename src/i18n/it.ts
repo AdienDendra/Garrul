@@ -51,6 +51,8 @@ export const it = {
 	// "bloccato", not "bandito": a ban here is an account block, and "bandito"
 	// also means "bandit" in Italian.
 	"err.banned": "Il tuo account è bloccato.",
+	"err.staff.forbidden":
+		"Solo lo staff con sessione avviata può contrassegnare un commento come dello staff.",
 	"err.thread_closed": "I commenti sono chiusi per questo articolo.",
 	"err.internal": "Si è verificato un errore. Riprova.",
 

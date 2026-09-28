@@ -61,6 +61,7 @@ export const it = {
 	"w.email_ph": "nome@example.com",
 	"w.email_label": "Indirizzo email",
 	"w.notify": "Inviami un'email sui nuovi commenti",
+	"w.post_as_staff": "Pubblica come staff",
 	"w.post_comment": "Pubblica commento",
 	"w.post_reply": "Pubblica risposta",
 	"w.reply_ph": "Rispondi a @{name}…",
@@ -83,6 +84,8 @@ export const it = {
 
 	// ── A comment ───────────────────────────────────────────────────────────
 	"w.verified": "verificato",
+	"w.pinned": "fissato",
+	"w.staff": "Staff",
 	"w.edited": "· modificato",
 	"w.pending": "In attesa di approvazione",
 	"w.removed_by_mod": "[rimosso da un moderatore]",
@@ -117,6 +120,12 @@ export const it = {
 	// explicitly rules out. "Hmm" reads the same way in Italian.
 	"w.react.hmm": "Hmm",
 	"w.react.cry": "Triste",
+	"w.react.thumbsup": "D'accordo",
+	"w.react.party": "Evviva",
+	"w.react.eyes": "Da seguire",
+	"w.react.thanks": "Grazie",
+	"w.react.rocket": "Emozionante",
+	"w.react.hundred": "Esatto",
 
 	// ── The thread ──────────────────────────────────────────────────────────
 	"w.replies": { one: "{n} risposta", other: "{n} risposte" },

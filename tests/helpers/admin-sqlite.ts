@@ -116,12 +116,18 @@ export const adminHarness = (extraEnv: Record<string, unknown> = {}) => {
 
 	const request = (
 		path: string,
-		opts: { method?: string; body?: unknown; sid?: string | undefined } = {},
+		opts: {
+			method?: string;
+			body?: unknown;
+			sid?: string | undefined;
+			headers?: Record<string, string>;
+		} = {},
 	) => {
 		const { method = "GET", body, sid = ADMIN_SID } = opts;
 		const headers: Record<string, string> = {
 			cookie: `__Host-garrul_sess=${sid}`,
 			origin: "http://localhost",
+			...opts.headers,
 		};
 		if (body !== undefined) headers["content-type"] = "application/json";
 		return app.request(

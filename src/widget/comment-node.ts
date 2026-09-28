@@ -50,6 +50,11 @@ export type TreeNode = {
 	score_up: number;
 	score_down: number;
 	my_vote: -1 | 0 | 1;
+	/** Only on the post's pinned thread (page one). Absent otherwise — never
+	 *  `false` — so read it as a truthiness check. */
+	pinned?: true;
+	/** Mirrors lib/tree.ts: present only on a comment its author posted as staff. */
+	staff?: true;
 	replies: TreeNode[];
 };
 
@@ -81,6 +86,7 @@ export type PostedEcho = {
 	deleted_by: TreeNode["deleted_by"];
 	created_at: number;
 	author: TreeAuthor;
+	staff?: true;
 };
 
 const STATUSES: ReadonlySet<string> = new Set([
@@ -136,6 +142,7 @@ export const readPostedEcho = (body: unknown): PostedEcho | null => {
 		deleted_by:
 			deletedBy === "author" || deletedBy === "moderator" ? deletedBy : null,
 		created_at: body.created_at,
+		...(body.staff === true ? { staff: true as const } : {}),
 		author: {
 			id: author.id,
 			name: author.name,
@@ -202,6 +209,20 @@ export const topLevelPlacement = (sort: SortKey): "prepend" | "append" =>
 	sort === "old" ? "append" : "prepend";
 
 /**
+ * The node a "prepend" inserts before: the list's first thread, unless that
+ * thread is the pin. The server serves the pin ahead of every sort, so a new
+ * comment lands second rather than displacing it until the next load.
+ * Structurally typed so the node test pool can exercise it without a DOM.
+ */
+export const prependAnchor = <N>(list: {
+	firstChild: N | null;
+	firstElementChild: { hasAttribute(name: string): boolean; nextSibling: N | null } | null;
+}): N | null => {
+	const first = list.firstElementChild;
+	return first?.hasAttribute("data-pinned") ? first.nextSibling : list.firstChild;
+};
+
+/**
  * Build the node to render from the echo, given the parent it was a reply to
  * (`null` for a top-level comment).
  *
@@ -235,6 +256,7 @@ export const synthesizePosted = (
 			deleted_by: echo.deleted_by,
 			created_at: echo.created_at,
 			author: echo.author,
+			...(echo.staff ? { staff: true as const } : {}),
 			depth: slot ? slot.depth : 0,
 			flatten_from: slot ? slot.flatten_from : null,
 			reactions: [],

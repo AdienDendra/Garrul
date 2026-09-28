@@ -395,7 +395,9 @@
     "0021_moderator_notifications.sql",
     "0022_reaction_kind_fire.sql",
     "0023_moderator_notes.sql",
-    "0024_subscriptions_token_index.sql"
+    "0024_subscriptions_token_index.sql",
+    "0025_comment_pins.sql",
+    "0026_staff_badge.sql"
   ],
   "breakingChanges": [
     {

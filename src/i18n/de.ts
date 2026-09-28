@@ -38,6 +38,8 @@ export const de = {
 	"err.delete.not_author": "Es können nur eigene Kommentare gelöscht werden.",
 	"err.not_found": "Nicht gefunden.",
 	"err.banned": "Dieses Konto ist gesperrt.",
+	"err.staff.forbidden":
+		"Nur angemeldetes Team-Personal kann einen Kommentar als Team-Personal kennzeichnen.",
 	"err.thread_closed": "Kommentare sind für diesen Beitrag geschlossen.",
 	"err.internal": "Etwas ist schiefgelaufen. Bitte erneut versuchen.",
 

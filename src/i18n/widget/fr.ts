@@ -43,6 +43,7 @@ export const fr = {
 	// lookalike would be somebody's real domain.
 	"w.email_ph": "nom@example.com",
 	"w.notify": "M'avertir par e-mail des nouveaux commentaires",
+	"w.post_as_staff": "Publier au nom de l'équipe",
 	"w.post_comment": "Publier le commentaire",
 	"w.post_reply": "Publier la réponse",
 	"w.reply_ph": "Répondre à @{name}…",
@@ -64,6 +65,8 @@ export const fr = {
 
 	// ── A comment ───────────────────────────────────────────────────────────
 	"w.verified": "vérifié",
+	"w.pinned": "épinglé",
+	"w.staff": "Équipe",
 	"w.edited": "· modifié",
 	"w.pending": "En attente de validation",
 	"w.removed_by_mod": "[supprimé par un modérateur]",
@@ -94,6 +97,12 @@ export const fr = {
 	"w.react.laugh": "Drôle",
 	"w.react.hmm": "Hmm",
 	"w.react.cry": "Triste",
+	"w.react.thumbsup": "D'accord",
+	"w.react.party": "Youpi",
+	"w.react.eyes": "À suivre",
+	"w.react.thanks": "Merci",
+	"w.react.rocket": "Palpitant",
+	"w.react.hundred": "Exactement",
 
 	// ── The thread ──────────────────────────────────────────────────────────
 	"w.replies": { one: "{n} réponse", other: "{n} réponses" },

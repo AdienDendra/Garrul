@@ -1,0 +1,11 @@
+-- Per-comment, opt-in staff marker.
+-- Forward-only. The migration runner records this as applied; never edit
+-- once shipped — make a 0027_*.sql instead.
+--
+-- The public tree deliberately carries no per-author role (see TreeAuthor in
+-- src/lib/tree.ts): a privilege flag on every comment is a free map of which
+-- accounts are worth attacking. This marks one comment its staff author chose
+-- to post as staff, so only those reveal a role. Gated on role at insert time
+-- (api.comments.ts, admin reply), cleared on demotion to `user` (setUserRole),
+-- never touched by an edit.
+ALTER TABLE comments ADD COLUMN as_staff INTEGER NOT NULL DEFAULT 0;

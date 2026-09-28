@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
-# Garrul setup — prompt-driven first-time configuration.
+# Garrul setup — prompt-driven install, from a fresh clone to a live Worker.
 # Creates D1 + KV namespaces, writes their IDs into wrangler.toml (matched by
-# binding name, so a reordered or hand-edited file is safe), and sets production
-# secrets — either in bulk from secrets.env or one prompt at a time.
+# binding name, so a reordered or hand-edited file is safe), sets production
+# secrets (bulk from secrets.env or one prompt at a time), writes the
+# placeholder [vars], then offers to migrate the remote D1, deploy, and check
+# /api/v1/health. Every step after the secrets asks first; re-runs keep
+# existing ids and vars.
 #
 # Every config list below is generated between BEGIN/END markers — the secret
 # prompts and the next-steps vars from scripts/config-registry.ts, the create_d1
@@ -73,8 +76,9 @@ confirm_route() {
 		*)
 			echo
 			echo "✓ staying on *.workers.dev — leave [[routes]] commented out."
-			echo "  After your first deploy, set PUBLIC_BASE_URL and"
-			echo "  OAUTH_CALLBACK_BASE to the workers.dev URL wrangler prints."
+			echo "  Leave PUBLIC_BASE_URL and OAUTH_CALLBACK_BASE empty at the vars"
+			echo "  prompt; after the deploy, setup offers to fill them from the"
+			echo "  workers.dev URL wrangler prints."
 			echo "  ALLOWED_ORIGINS stays the site that embeds the widget."
 			;;
 	esac
@@ -408,6 +412,240 @@ case "$mode" in
 	b|B|bulk|BULK) bulk_secrets ;;
 	*) interactive_secrets ;;
 esac
+
+confirm_yes() {
+	local resp
+	read -r -p "$1 [Y/n] " resp
+	case "$resp" in
+		n|N|no|NO) return 1 ;;
+	esac
+}
+
+# get_var <name> <file> — <name>'s value in the file's top-level [vars] table,
+# either TOML quote style. Empty when absent or commented out. [env.*.vars]
+# overrides are not read: setup only configures the default environment.
+get_var() {
+	awk -v name="$1" '
+		BEGIN { dq = "\""; sq = sprintf("%c", 39) }
+		/^[[:space:]]*\[/ { invars = ($0 ~ /^[[:space:]]*\[vars\][[:space:]]*(#.*)?$/); next }
+		invars && $0 ~ ("^[[:space:]]*" name "[[:space:]]*=") {
+			v = $0
+			sub("^[^=]*=[[:space:]]*", "", v)
+			# Strip only the quote style this value actually opened with, so a
+			# double-quoted value containing an apostrophe (or vice versa) is
+			# not cut short at that inner character.
+			q = substr(v, 1, 1)
+			if (q == dq || q == sq) {
+				v = substr(v, 2)
+				i = index(v, q)
+				if (i > 0) v = substr(v, 1, i - 1)
+			}
+			print v
+			exit
+		}
+	' "$2"
+}
+
+# The template ships each mustEdit var with its placeholder as the value, so
+# "unchanged from wrangler.example.toml" is "not configured yet".
+var_is_placeholder() {
+	[ "$(get_var "$1" wrangler.toml)" = "$(get_var "$1" wrangler.example.toml)" ]
+}
+
+# set_var <name> <value> — rewrite <name>'s line in wrangler.toml's top-level
+# [vars]. Same tmp-and-rename swap as set_binding_id. A missing or
+# commented-out line is reported, not appended: commenting a var out is the
+# operator's decision. Callers reject `"` and `\`, so the value is a plain
+# TOML basic string and awk -v has no escapes to expand.
+set_var() {
+	local name="$1" val="$2" tmp rc
+	tmp=$(mktemp ./wrangler.toml.new.XXXXXX)
+	cp -p wrangler.toml "$tmp" 2>/dev/null || cp wrangler.toml "$tmp"
+	set +e
+	awk -v name="$name" -v val="$val" '
+		/^[[:space:]]*\[/ { invars = ($0 ~ /^[[:space:]]*\[vars\][[:space:]]*(#.*)?$/) }
+		invars && !done && $0 ~ ("^[[:space:]]*" name "[[:space:]]*=") {
+			print name " = \"" val "\""; done = 1; next
+		}
+		{ print }
+		END { exit done ? 0 : 4 }
+	' wrangler.toml > "$tmp"
+	rc=$?
+	set -e
+	case $rc in
+		0) mv "$tmp" wrangler.toml; echo "  ✓ wrote $name into wrangler.toml" ;;
+		4)
+			echo "warning: no uncommented $name line in wrangler.toml [vars]." >&2
+			echo "         Add $name = \"$val\" by hand." >&2 ;;
+		*) echo "error: awk failed (exit $rc) setting $name; wrangler.toml unchanged." >&2 ;;
+	esac
+	rm -f "$tmp"
+}
+
+# prompt_var <name> <hint> — the default is the current value unless that is
+# still the template placeholder. An empty answer leaves the placeholder and
+# sets VARS_PENDING.
+prompt_var() {
+	local name="$1" hint="$2" cur ph def val
+	cur=$(get_var "$name" wrangler.toml)
+	ph=$(get_var "$name" wrangler.example.toml)
+	def=""
+	if [ "$cur" != "$ph" ]; then
+		def="$cur"
+	elif [ "$name" = OAUTH_CALLBACK_BASE ] && ! var_is_placeholder PUBLIC_BASE_URL; then
+		# Same value in most setups — the provider redirect URIs hang off it.
+		def=$(get_var PUBLIC_BASE_URL wrangler.toml)
+	fi
+	echo
+	echo "$name — $hint"
+	while :; do
+		read -r -p "  value${def:+ [$def]}: " val
+		val="${val:-$def}"
+		case "$val" in
+			*'"'*|*\\*) echo "  no \" or \\ allowed — try again" ;;
+			*) break ;;
+		esac
+	done
+	if [ -z "$val" ]; then
+		echo "  skipped — still the placeholder \"$ph\""
+		VARS_PENDING=1
+	elif [ "$val" = "$cur" ]; then
+		echo "  ✓ $name unchanged"
+	else
+		set_var "$name" "$val"
+	fi
+}
+
+configure_vars() {
+	VARS_PENDING=0
+# BEGIN:var-prompts
+	# Generated by `npm run config:build` from scripts/config-registry.ts. Do not edit by hand.
+	prompt_var ALLOWED_ORIGINS "comma-separated origins allowed to embed and call /api/*"
+	prompt_var ADMIN_EMAILS "comma-separated emails that get auto-admin on OAuth signup"
+	prompt_var PUBLIC_BASE_URL "public URL of this Worker; used in permalinks and email bodies"
+	prompt_var OAUTH_CALLBACK_BASE "must match the redirect URI registered with each provider"
+# END:var-prompts
+	if [ "$VARS_PENDING" = 1 ]; then PENDING=1; fi
+}
+
+PENDING=0
+
+echo
+echo "=== Worker vars ==="
+echo
+echo "wrangler.toml ships four [vars] as placeholders. Enter keeps the value in"
+echo "[brackets]; an empty answer leaves the placeholder for later. On"
+echo "*.workers.dev, leave PUBLIC_BASE_URL and OAUTH_CALLBACK_BASE empty — the"
+echo "deploy step offers to fill them from the URL wrangler prints."
+echo
+if confirm_yes "Set them now?"; then
+	configure_vars
+else
+	echo "  skipped — edit [vars] in wrangler.toml by hand"
+	PENDING=1
+fi
+
+# The workers.dev hostname can't be known before the first deploy, so this is
+# the first point where setup can fill PUBLIC_BASE_URL for someone who chose it.
+deploy_worker() {
+	local log rc url
+	log=$(mktemp)
+	set +e
+	npm run deploy 2>&1 | tee "$log"
+	rc=${PIPESTATUS[0]}
+	set -e
+	url=$(grep -Eo 'https://[A-Za-z0-9.-]+\.workers\.dev' "$log" | head -1 || true)
+	rm -f "$log"
+	if [ "$rc" -ne 0 ]; then
+		echo "error: npm run deploy failed (exit $rc). Fix the above and re-run." >&2
+		exit "$rc"
+	fi
+	if [ -z "$url" ] || ! var_is_placeholder PUBLIC_BASE_URL; then
+		return 0
+	fi
+	echo
+	if confirm_yes "PUBLIC_BASE_URL is still the placeholder. Use $url and redeploy?"; then
+		set_var PUBLIC_BASE_URL "$url"
+		if var_is_placeholder OAUTH_CALLBACK_BASE; then
+			set_var OAUTH_CALLBACK_BASE "$url"
+		fi
+		set +e
+		npm run deploy
+		rc=$?
+		set -e
+		if [ "$rc" -ne 0 ]; then
+			echo "error: npm run deploy failed (exit $rc). Fix the above and re-run." >&2
+			exit "$rc"
+		fi
+	fi
+}
+
+verify_health() {
+	local base i
+	base=$(get_var PUBLIC_BASE_URL wrangler.toml)
+	base="${base%/}"
+	if var_is_placeholder PUBLIC_BASE_URL; then
+		echo "  skipped — PUBLIC_BASE_URL is still the placeholder \"$base\""
+		PENDING=1
+		return 0
+	fi
+	if ! command -v curl >/dev/null 2>&1; then
+		echo "  skipped — curl not installed; open $base/api/v1/health in a browser"
+		PENDING=1
+		return 0
+	fi
+	# A fresh custom domain can take ~30s to get its certificate.
+	for i in 1 2 3; do
+		if curl -fsS "$base/api/v1/health"; then
+			echo
+			echo "✓ $base/api/v1/health answered — Garrul is live"
+			return 0
+		fi
+		[ "$i" = 3 ] || sleep 10
+	done
+	echo "✗ $base/api/v1/health did not answer." >&2
+	echo "  See docs/troubleshooting.md for the common failure modes." >&2
+	PENDING=1
+}
+
+echo
+echo "=== Migrate, deploy, verify ==="
+
+echo
+if confirm_yes "Apply the schema to production D1 (npm run migrate -- --remote)?"; then
+	set +e
+	npm run migrate -- --remote
+	rc=$?
+	set -e
+	if [ $rc -ne 0 ]; then
+		echo "error: npm run migrate -- --remote failed (exit $rc). Fix the above and re-run." >&2
+		exit $rc
+	fi
+else
+	echo "  skipped — run later with: npm run migrate -- --remote"
+	PENDING=1
+fi
+
+echo
+if confirm_yes "Deploy the Worker (npm run deploy)?"; then
+	deploy_worker
+	echo
+	if confirm_yes "Smoke-test /api/v1/health?"; then
+		verify_health
+	else
+		PENDING=1
+	fi
+else
+	echo "  skipped — run later with: npm run deploy"
+	PENDING=1
+fi
+
+if [ "$PENDING" = 0 ]; then
+	echo
+	echo "=== Done ==="
+	echo "Tail logs: npm run tail"
+	exit 0
+fi
 
 echo
 echo "=== Next steps ==="

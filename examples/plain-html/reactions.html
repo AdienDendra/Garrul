@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<title>Garrul — reactions bar example</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<style>
+		body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
+		#garrul { min-height: 4.5em; }
+	</style>
+</head>
+<body>
+	<h1>Garrul reactions-bar demo</h1>
+	<p>The page-level reactions bar alone, no comment thread. Needs
+	<code>PAGE_REACTIONS_ENABLED=true</code> (or <code>PAGE_VOTES_ENABLED</code>)
+	on the local Worker at <code>http://localhost:8787</code>; with both off
+	the element stays empty and the console says why.</p>
+
+	<div
+		id="garrul"
+		data-mode="reactions"
+		data-slug="welcome"
+		data-api="http://localhost:8787"
+	></div>
+
+	<script src="http://localhost:8787/embed.js" defer></script>
+</body>
+</html>

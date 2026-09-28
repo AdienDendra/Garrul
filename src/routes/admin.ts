@@ -99,8 +99,17 @@ import {
 	type CommentAction,
 	eraseUser,
 	moderateComment,
+	pinComment,
 	resolveReports,
 } from "../lib/moderation";
+import {
+	EXPORT_QUERY_BUDGET,
+	type ExportCounts,
+	exportQueryCost,
+	exportStream,
+	siteExportCsv,
+	siteExportJson,
+} from "../lib/site-export";
 import { checkOutboundUrl } from "../lib/url-safety";
 import {
 	peekCachedLatestVersion,
@@ -131,14 +140,16 @@ import { issueTelegramLinkToken } from "./telegram";
 import { renderSettings } from "../admin-ui/pages/settings";
 import {
 	bustSettingsCache,
+	canonicalReactionKinds,
 	FLAG_KEYS,
+	isReactionKindsKey,
 	loadNumbers,
 	loadSettings,
-	MAX_TEXT_SETTING_CHARS,
 	NUMBER_KEYS,
 	numberBounds,
 	STRING_KEYS,
 	stringOptions,
+	textMax,
 	TEXT_KEYS,
 } from "../lib/settings";
 import { bustTreeCache } from "../lib/tree-cache";
@@ -997,8 +1008,16 @@ admin.post("/settings", async (c) => {
 				return c.json({ error: `invalid_text:${key}` }, 400);
 			}
 			const value = raw.trim();
-			if (value.length > MAX_TEXT_SETTING_CHARS) {
+			if (value.length > textMax(key)) {
 				return c.json({ error: `text_too_long:${key}` }, 400);
+			}
+			if (isReactionKindsKey(key)) {
+				const kinds = canonicalReactionKinds(value);
+				if (!kinds) {
+					return c.json({ error: `invalid_reaction_kinds:${key}` }, 400);
+				}
+				writtenTexts[key] = kinds;
+				continue;
 			}
 			// An empty box means an empty list, not "inherit the env default" —
 			// an operator clearing a muted-words list has to be able to clear it.
@@ -1728,6 +1747,7 @@ admin.post("/api/comments/:id/reply", async (c) => {
 			body_md?: unknown;
 			saved_reply_id?: unknown;
 			notify?: unknown;
+			as_staff?: unknown;
 		}>()
 		.catch(() => null);
 	if (!body) return c.json({ error: "invalid_body" }, 400);
@@ -1749,6 +1769,11 @@ admin.post("/api/comments/:id/reply", async (c) => {
 	// mails the whole thread. Absent stays absent; anything present must be a
 	// real boolean.
 	if (body.notify != null && typeof body.notify !== "boolean") {
+		return c.json({ error: "invalid_body" }, 400);
+	}
+	// Same rule as `notify`: optional, never coerced. Defaults on — a reply from
+	// the moderation panel is the staff voice unless the mod says otherwise.
+	if (body.as_staff != null && typeof body.as_staff !== "boolean") {
 		return c.json({ error: "invalid_body" }, 400);
 	}
 
@@ -1791,6 +1816,7 @@ admin.post("/api/comments/:id/reply", async (c) => {
 		ip_hash: null,
 		user_agent: null,
 		depth,
+		as_staff: body.as_staff ?? true,
 	});
 
 	// Default on: this is a real comment on a real thread, so the people
@@ -1888,6 +1914,19 @@ admin.post("/api/comments/:id", async (c) => {
 	const body = await c.req
 		.json<{ action?: string; reason?: string }>()
 		.catch(() => null);
+	if (body?.action === "pin" || body?.action === "unpin") {
+		const pinned = await pinComment({
+			env: c.env,
+			reqUrl: c.req.url,
+			adminId: user.id,
+			commentId: id,
+			pin: body.action === "pin",
+		});
+		if (!pinned.ok) {
+			return c.json({ error: pinned.error }, pinned.error === "not_found" ? 404 : 400);
+		}
+		return c.json({ ok: true, id: pinned.id, pinned: pinned.pinned });
+	}
 	const action = body?.action as CommentAction | undefined;
 	if (
 		action !== "approve" &&
@@ -2151,6 +2190,71 @@ admin.get("/api/users/:id/export", async (c) => {
 		"content-type": "application/json; charset=utf-8",
 		"content-disposition": `attachment; filename="garrul-export-${safeId}.json"`,
 		// Never let an export sit in a shared cache.
+		"cache-control": "no-store",
+	});
+});
+
+/**
+ * The whole comment layer as one download — JSON (every exported table) or
+ * CSV (comments only, for a spreadsheet). Contents and exclusions live in
+ * lib/site-export.ts. Streamed, so the Worker never holds the file.
+ *
+ * Same GET-that-writes shape as the per-user export above, so the same
+ * `Sec-Fetch-Site` gate. It reads every row of eight tables — one click
+ * spends a visible slice of the D1 free-tier daily read quota.
+ */
+admin.get("/api/export", async (c) => {
+	if (c.req.header("sec-fetch-site") === "cross-site") {
+		return c.json({ error: "cross_site_forbidden" }, 403);
+	}
+	const user = await requireAdmin(c);
+	if (user instanceof Response) return user;
+	const format = c.req.query("format") ?? "json";
+	if (format !== "json" && format !== "csv") {
+		return c.json({ error: "invalid_format" }, 400);
+	}
+	// Refused before any byte streams — see EXPORT_QUERY_BUDGET.
+	const queries = await exportQueryCost(c.env.DB, format);
+	if (queries > EXPORT_QUERY_BUDGET) {
+		return c.json(
+			{
+				error: "export_too_large",
+				queries,
+				budget: EXPORT_QUERY_BUDGET,
+				hint: "Too large to export in one Worker request; run `npm run db:export` instead.",
+			},
+			413,
+		);
+	}
+
+	const counts: ExportCounts = {};
+	const chunks =
+		format === "json"
+			? siteExportJson(c.env.DB, counts)
+			: siteExportCsv(c.env.DB, counts);
+	const ctx = c.executionCtx;
+	const body = exportStream(chunks, (complete) => {
+		// Counts only exist once the stream has run, so the audit row is
+		// written at close. `waitUntil` keeps the insert alive when the client
+		// hangs up; awaiting it too means the last byte lands after the row.
+		const write = adminInsertAudit(c.env.DB, {
+			admin_id: user.id,
+			action: "site.export",
+			target_kind: "system",
+			meta: { format, counts, complete },
+		});
+		ctx.waitUntil(write);
+		return write;
+	});
+
+	const date = new Date().toISOString().slice(0, 10);
+	// `c.body`, not `new Response` — see the per-user export above.
+	return c.body(body, 200, {
+		"content-type":
+			format === "json"
+				? "application/json; charset=utf-8"
+				: "text/csv; charset=utf-8",
+		"content-disposition": `attachment; filename="garrul-export-${date}.${format}"`,
 		"cache-control": "no-store",
 	});
 });

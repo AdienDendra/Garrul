@@ -40,6 +40,9 @@
  *     frame with no `?lang=` claims English even where the widget will resolve
  *     to something else. The widget corrects the part that affects layout
  *     (`dir` on its own host element) once `/api/v1/config` answers.
+ *   ?mode=reactions                   — data-mode="reactions": the page
+ *     reactions/votes bar alone, no thread. Closed vocabulary like ?preset=;
+ *     any other value emits no attribute and the frame is the normal thread.
  *
  * The page is cached for 5 minutes, which is safe because every one of these
  * params is part of the URL and therefore part of the cache key.
@@ -390,6 +393,7 @@ iframe.get("/:slug", (c) => {
 	// than emitting an attribute nothing matches.
 	const presetRaw = c.req.query("preset") ?? "";
 	const preset = PRESETS.has(presetRaw) ? presetRaw : "";
+	const mode = c.req.query("mode") === "reactions" ? "reactions" : "";
 	const lang = c.req.query("lang") ?? "";
 	// See the ?lang= note in the route doc above: `data-lang` forwards the raw
 	// request, `<html lang>` only ever claims a locale that exists.
@@ -448,7 +452,7 @@ iframe.get("/:slug", (c) => {
   data-title="${escapeAttr(title)}"
   data-url="${escapeAttr(pageUrl)}"${published ? `\n  data-published="${escapeAttr(published)}"` : ""}
   data-theme="${escapeAttr(theme)}"${preset ? `\n  data-preset="${escapeAttr(preset)}"` : ""}
-  data-lang="${escapeAttr(lang)}"
+  data-lang="${escapeAttr(lang)}"${mode ? `\n  data-mode="${mode}"` : ""}
 ></div>
 <script src="${escapeAttr(apiBase)}/embed.js"></script>
 <script>

@@ -65,27 +65,34 @@ end-to-end before improvising. Operator-side shape:
 
 1. `npm install` (installs `wrangler` as a dev dep).
 2. `npx wrangler login` — browser OAuth, one-time per machine.
-3. Copy templates: `cp wrangler.example.toml wrangler.toml` and
-   `cp .dev.vars.example .dev.vars`. Both targets are gitignored.
-4. Run `npm run setup`. It creates the D1 database (`garrul-db`)
-   and the four KV namespaces (`RATE_LIMITS`, `OAUTH_STATE`, `SESSIONS`,
-   `TREE_CACHE`), pastes their IDs into `wrangler.toml`, generates
-   `JWT_SECRET` + `IP_HASH_SECRET` straight into Cloudflare (never
-   written to disk), then offers two ways to set the rest: **bulk**
+3. Run `npm run setup`. It copies `wrangler.example.toml` →
+   `wrangler.toml` (an existing one is kept), creates the D1 database
+   (`garrul-db`) and the four KV namespaces (`RATE_LIMITS`, `OAUTH_STATE`,
+   `SESSIONS`, `TREE_CACHE`), pastes their IDs into `wrangler.toml`,
+   generates `JWT_SECRET` + `IP_HASH_SECRET` straight into Cloudflare
+   (never written to disk), then offers two ways to set the rest: **bulk**
    (fill in a copy of `secrets.example.env`, upload with
    `wrangler secret bulk`) or **one prompt per secret**. Skip anything
    you don't have yet — `wrangler secret put NAME` works later.
-5. Fill in `[vars]` in `wrangler.toml` (section 5 has the table).
-6. Apply migrations to **remote** D1: `npm run migrate -- --remote`.
+4. Setup prompts for the four placeholder `[vars]` (`ALLOWED_ORIGINS`,
+   `ADMIN_EMAILS`, `PUBLIC_BASE_URL`, `OAUTH_CALLBACK_BASE`; section 5
+   has the full table). A value already set is the default.
+   `OAUTH_CALLBACK_BASE` defaults to `PUBLIC_BASE_URL`.
+5. Setup applies migrations to **remote** D1: `npm run migrate -- --remote`.
    Without `--remote` only the local Miniflare DB is migrated and the
    deployed Worker will 500.
-7. `npm run deploy` — uploads the Worker and provisions the custom
-   domain.
-8. Smoke-test: `curl -fsSL https://comments.yourdomain.com/api/v1/health`
+6. Setup runs `npm run deploy`. That uploads the Worker and provisions
+   the custom domain. On `*.workers.dev` it offers to write the printed
+   URL into `PUBLIC_BASE_URL` / `OAUTH_CALLBACK_BASE` and redeploy.
+7. Setup smoke-tests `curl -fsS https://comments.yourdomain.com/api/v1/health`
    → `{"status":"ok","service":"garrul","time":"..."}`.
 
-The most common deploy failures are "forgot to set a secret" (step 4)
-and "migrated locally but not remotely" (step 6).
+Steps 4–7 each ask first. A skipped step is printed as a manual command
+at the end, and re-running `npm run setup` is idempotent. For local dev
+only: `cp .dev.vars.example .dev.vars`.
+
+The most common deploy failures are "forgot to set a secret" (step 3)
+and "migrated locally but not remotely" (step 5).
 
 ## 5. Configuration: vars vs. secrets
 
@@ -274,6 +281,10 @@ so a toggle takes effect within seconds across the widget (`/api/v1/config`)
 and the server-side gates. Leaving a flag untouched in the admin UI writes no
 row, so existing installs that only set env vars are unaffected.
 Implementation: `src/lib/settings.ts`.
+
+The reaction-kind lists (`comment_reaction_kinds`, `page_reaction_kinds`) are
+the one runtime setting with **no env var**. They live only in the `settings`
+table, and "Reset to defaults" restores the original six kinds.
 
 **Changing one of these by env var instead takes up to an hour.** The cache TTL
 is 1 hour (raised from 5 minutes: it's a fixed pair of KV keys that
@@ -919,6 +930,8 @@ tracked by the `_migrations` table. Current set:
 - `0022_reaction_kind_fire.sql` — renames the `like` reaction to `fire`
 - `0023_moderator_notes.sql` — `moderator_notes`, internal moderator context on one comment or one account. Never rendered to readers, and the note *body* never reaches `audit_log`
 - `0024_subscriptions_token_index.sql` — `subscriptions(token)`; the unsubscribe-link lookup was a full table scan on two endpoints that take no session and no rate limit, so a loop of random tokens read the whole table per request
+- `0025_comment_pins.sql` — `comments.pinned_at` plus a partial UNIQUE index: one pinned top-level comment per post
+- `0026_staff_badge.sql` — `comments.as_staff`, the per-comment opt-in staff marker
 
 Run with `npm run migrate` (local Miniflare) or
 `npm run migrate -- --remote` (production D1). Idempotent. Never edit a
@@ -981,7 +994,7 @@ Pages (top nav):
 | `/admin/users/:id` | User detail: all their comments paginated, reactions received, audit history affecting them, the **Moderator notes** card, Ban/Unban, role controls, and two folded-away admin-only panels — **Export personal data** and **Erase personal data** (both below). |
 | `/admin/audit` | Audit log with filter form (admin, action, target kind/id, date range). |
 | `/admin/subscriptions` | Email subscription list. Filter by email/post/confirmed/unsubscribed. Actions: manual unsubscribe, resend confirmation. |
-| `/admin/operator` | Batch operations: rerender stale comments (POSTs `/admin/api/ops/rerender` in 50-row chunks until done), seed-demo (idempotent; gated to `ENV != "production"`), the comment import upload (Disqus XML, a Remark42 backup, a Comentario/Commento JSON export, or the JSON `npm run dump-isso` / `npm run dump-cusdis` produces from an isso `comments.db` or a Cusdis `db.sqlite` — gzipped or not — see below), and two retention cards — IP-hash and audit-log — each showing how many rows are past the configured window and offering a manual drain. |
+| `/admin/operator` | Batch operations: rerender stale comments (POSTs `/admin/api/ops/rerender` in 50-row chunks until done), seed-demo (idempotent; gated to `ENV != "production"`), the comment import upload (Disqus XML, a Remark42 backup, a Comentario/Commento JSON export, or the JSON `npm run dump-isso` / `npm run dump-cusdis` produces from an isso `comments.db` or a Cusdis `db.sqlite` — gzipped or not — see below), and two retention cards — IP-hash and audit-log — each showing how many rows are past the configured window and offering a manual drain, and **Export site data** (JSON/CSV download links — see §11). |
 | `/admin/settings` | Editable form for feature flags, display/pagination numbers, and the moderation dials (edit window, thread auto-close, community auto-collapse, the three anti-spam heuristics), saved to the `settings` D1 table (no redeploy — see section 5). Also renders a read-only `(set)`/`(unset)` summary of deploy-time config (Turnstile, email, OAuth, spam provider), which still changes via `wrangler secret put` / `wrangler.toml`. |
 | `/admin/webhooks` | Outbound webhook endpoints: add/pause/delete, per-endpoint secret + event filter, adapter (`generic` / `slack` / `discord` / `telegram`), failure counts and retry status. |
 | `/admin/telegram` | **Admin-only.** Telegram operator bot: shows whether the bot token/webhook secret are set, links your personal Telegram account (one-time code or deep link), toggles the daily digest, and unlinks. See `docs/telegram.md`. |
@@ -992,10 +1005,10 @@ State-changing endpoints (all under `/admin/api/...`, all require admin
 session + Origin allowlist, all write an `audit_log` row before
 responding):
 
-- `POST /admin/api/comments/:id` — `{action: approve|spam|delete|restore, reason?}`
+- `POST /admin/api/comments/:id` — `{action: approve|spam|delete|restore, reason?}`, or `{action: pin|unpin}` (approved top-level only, else 400 `not_pinnable`; one pin per post, pinning moves it; audited `comment.pin` / `comment.unpin`; hiding a pinned comment (spam/delete) leaves the pin dormant, restoring/re-approving it brings the pin back, and pinning another comment clears it)
 - `POST /admin/api/comments/bulk` — `{ids: string[], action}` (cap 100)
 - `POST /admin/api/comments/:id/reports/resolve` — clears open reader reports on a comment (audited `report.resolve`)
-- `POST /admin/api/comments/:id/reply` — `{body_md, saved_reply_id?, notify?}` posts a moderator reply nested under `:id` (audited `comment.reply`; `notify` must be a real boolean when present, defaults to true, and fans out to the post's confirmed subscribers; `saved_reply_id` is audit provenance only and must be a preset this mod can see)
+- `POST /admin/api/comments/:id/reply` — `{body_md, saved_reply_id?, notify?, as_staff?}` posts a moderator reply nested under `:id` (audited `comment.reply`; `notify` must be a real boolean when present, defaults to true, and fans out to the post's confirmed subscribers; `saved_reply_id` is audit provenance only and must be a preset this mod can see; `as_staff` must be a real boolean when present and defaults to true (the reply shows the staff badge))
 - `POST /admin/api/notes` — `{target_kind: comment|user, target_id, body}` writes an internal moderator note (mod or admin; audited `note.create` against the **target**, with only the note id in `meta`). Body caps at 4 000 characters; a target that does not exist is `404 target_not_found`.
 - `DELETE /admin/api/notes/:id` — removes one note (audited `note.delete`, again against the target, with `meta.own` recording whether the caller wrote it). Author **or** admin, deliberately looser than saved replies' owner-only rule; another mod gets `403 not_author`.
 - `POST /admin/api/posts/close` — `{slug, closed: boolean}` (per-post close/open; audited `post.close` / `post.open`; busts the cached first page)
@@ -1020,6 +1033,8 @@ One admin read is listed here too, because of what it returns:
 
 - `GET /admin/api/users/:id/export` — the whole of one person's personal data as
   JSON (admin-only). See below.
+- `GET /admin/api/export?format=json|csv` — the whole comment layer as a
+  streamed download (admin-only). See §11 "Site-wide export".
 
 **Exporting a user's personal data.** `/admin/users/<id>` → **Export
 personal data** → *Download JSON*, or `GET /admin/api/users/:id/export`
@@ -1596,6 +1611,11 @@ nowhere. `Expires` is generated ~6 months out on every response, so the
 file never goes stale on its own. Like `/AGENTS.md`, the route is public
 and needs no `Origin`.
 
+**Staff badge label.** Admin → Settings → Moderation → *Staff badge label* (≤ 32
+characters, DB-only, no env var). It replaces the badge text on comments a
+moderator posted as staff. Empty uses each reader's locale string. The widget
+receives it as `staff_badge_label` in `/api/v1/config` (null when unset).
+
 ### Mount cost and free-tier headroom (since v2.15.0)
 
 The Workers free tier allows **100,000 requests/day**, and what a
@@ -1740,6 +1760,51 @@ shipped.
 
 Full posture, including what rotation breaks and what a deletion request
 costs today: [`docs/ip-hashing.md`](docs/ip-hashing.md).
+
+### Site-wide export (JSON / CSV)
+
+`/admin/operator` → **Export site data**, or
+`GET /admin/api/export?format=json|csv` (admin-only; a moderator gets 403,
+a cross-site request gets 403). The response streams, is `no-store`, and
+saves as `garrul-export-<YYYY-MM-DD>.json` / `.csv`.
+
+- **JSON** is a portable backup:
+  `{"site_export_version":1,"exported_at":"<ISO>","tables":{…}}` with
+  `posts`, `comments`, `users`, `votes`, `reactions`, `page_votes`,
+  `page_reactions`, `subscriptions`. Timestamps are epoch ms, as stored.
+  Comments of **every** status (approved, pending, spam, deleted) are
+  included — a moderation decision is data.
+- **CSV** is comments only, for a spreadsheet: `id, post_slug, parent_id,
+  author_name, status, created_at (ISO), score (up − down), body_md`.
+  RFC 4180, every field quoted, CRLF. A text cell starting with `=`, `+`,
+  `-`, `@`, tab or CR gets a leading `'` so a spreadsheet can't run it as
+  a formula — which also means a markdown list line reads `'- item`. Use
+  the JSON when you need the text exactly.
+
+Columns are an explicit allowlist, so a column added by a future
+migration stays out until it is listed. **Never included:**
+`comments.ip_hash`, `comments.user_agent`, `comments.body_html` (rerender
+from `body_md`), subscription `token` / `confirm_token`, unconfirmed
+subscriptions, and `users.provider_id` for anonymous ghosts (it is the
+hashed IP). Whole tables left out: sessions, audit log, spam verdicts,
+reports, settings, webhooks, Telegram links, saved replies, moderator
+notes. **User emails are included** — the file is personal data for
+every commenter; store it like a `.sql` dump.
+
+Two operating notes. It reads every row of eight tables in 500-row pages,
+so on the D1 free tier one export spends a visible share of the daily read
+quota. And pages are separate reads, so the file is not a point-in-time
+snapshot; for that, use `npm run db:export`. Each download writes a
+`site.export` audit row with `{format, counts, complete}` — row counts
+only; `complete: false` means the download was cancelled or failed partway.
+
+**Size ceiling.** Each 500-row page is one D1 query, and D1 allows 50
+queries per Worker invocation on the Free plan (1,000 on Paid). The Worker
+can't see its plan, so before streaming it estimates the page count from
+each table's `MAX(rowid)` and answers `413 {"error":"export_too_large",
+"queries":N,"budget":44}` when the export would not fit — roughly 20,000
+rows across the eight tables (CSV counts comments only). No audit row is
+written for a refusal. Past the ceiling, use `npm run db:export`.
 
 ### Exporting one person rather than the database
 
@@ -2212,8 +2277,9 @@ case, but a hard-block user may simply not be able to sign in.
 
 **Migrations applied locally but not remotely.** First deploy 500s on
 every request; logs show `no such table: comments`. Run
-`npm run migrate -- --remote`. `--remote` is mandatory for production;
-`setup.sh` only touches the Miniflare local DB.
+`npm run migrate -- --remote`. `--remote` is mandatory for production.
+`setup.sh` runs it when you answer yes to its migrate step. A bare
+`npm run migrate` touches only the Miniflare local DB.
 
 **`Host` header mismatch behind a proxy.** If the Worker sits behind a
 non-Cloudflare proxy that rewrites `Host`, the `/AGENTS.md` route

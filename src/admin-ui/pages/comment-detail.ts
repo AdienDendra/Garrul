@@ -2,7 +2,6 @@ import type {
 	AdminComment,
 	AdminCommentDetail,
 	AuditRowWithAdmin,
-	CommentStatus,
 	ModeratorNoteWithAuthor,
 	Report,
 	SpamVerdictRow,
@@ -199,7 +198,8 @@ const banAuthorAction = (c: AdminComment, isAdmin: boolean): string => {
 </div>`;
 };
 
-const actionsFor = (status: CommentStatus): string => {
+const actionsFor = (c: AdminComment): string => {
+	const { status } = c;
 	const parts: string[] = [];
 	if (status !== "approved")
 		parts.push(
@@ -213,6 +213,14 @@ const actionsFor = (status: CommentStatus): string => {
 		parts.push(
 			`<button :disabled="busy" class="bad" @click="busy=true; act('delete').finally(()=>busy=false)">Delete</button>`,
 		);
+	// Pin: approved top-level only. `pinned_at` is undefined on SELECTs that
+	// don't fetch it; `!= null` treats that as unpinned.
+	if (status === "approved" && c.parent_id === null) {
+		const pinned = c.pinned_at != null;
+		parts.push(
+			`<button :disabled="busy" @click="busy=true; act('${pinned ? "unpin" : "pin"}').finally(()=>busy=false)">${pinned ? "Unpin" : "Pin"}</button>`,
+		);
+	}
 	return parts.join("");
 };
 
@@ -287,7 +295,7 @@ export const renderCommentDetail = (
       body: JSON.stringify({ action }),
     }).then(r => {
       if (!r.ok) throw new Error('action failed: ' + r.status);
-      this.$dispatch('toast', { text: action + 'd' });
+      this.$dispatch('toast', { text: action === 'pin' ? 'Pinned' : action === 'unpin' ? 'Unpinned' : action + 'd' });
       setTimeout(() => location.reload(), 600);
     }).catch(e => {
       this.$dispatch('toast', { text: e.message, kind: 'bad' });
@@ -296,7 +304,7 @@ export const renderCommentDetail = (
 }">
   <h2>Comment</h2>
   ${commentCard(comment, "Selected")}
-  <div class="actions" style="margin-top:0.5rem">${actionsFor(comment.status)}</div>
+  <div class="actions" style="margin-top:0.5rem">${actionsFor(comment)}</div>
   ${banAuthorAction(comment, isAdmin)}
 </div>
 

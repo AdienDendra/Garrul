@@ -232,16 +232,25 @@ export const rowActionToasts = (): Record<string, Record<string, string>> =>
 		]),
 	);
 
-const actionButtons = (id: string, status: CommentStatus): string => {
-	const parts: string[] = ROW_ACTIONS[status].map(
+const actionButtons = (c: AdminComment): string => {
+	const parts: string[] = ROW_ACTIONS[c.status].map(
 		({ action, label, toast }) =>
-			`<button :disabled="busy"${action === "approve" ? "" : ' class="bad"'} @click="${rowAct(id, action, toast)}">${label}</button>`,
+			`<button :disabled="busy"${action === "approve" ? "" : ' class="bad"'} @click="${rowAct(c.id, action, toast)}">${label}</button>`,
 	);
 	// Reply opens the free-text composer — mods only see it on
 	// approved/pending comments. No point replying to deleted/spam.
-	if (status !== "deleted" && status !== "spam") {
+	if (c.status !== "deleted" && c.status !== "spam") {
 		parts.push(
-			`<button :disabled="busy" @click="${openReply(id)}">Reply</button>`,
+			`<button :disabled="busy" @click="${openReply(c.id)}">Reply</button>`,
+		);
+	}
+	// Pin lives outside ROW_ACTIONS on purpose: that table is status-keyed and
+	// drives keyboard shortcuts plus `bulk-done` row removal, and a pinned row
+	// must stay put. Reload so the label flips.
+	if (c.status === "approved" && c.parent_id === null) {
+		const verb = c.pinned_at != null ? "unpin" : "pin";
+		parts.push(
+			`<button :disabled="busy" @click="busy=true; act(${jsLiteral(c.id)},${jsLiteral(verb)}).then(()=>location.reload()).catch(e=>$dispatch('toast',{text:e.message||'Action failed',kind:'bad'})).finally(()=>busy=false)">${verb === "pin" ? "Pin" : "Unpin"}</button>`,
 		);
 	}
 	return parts.join("");
@@ -361,7 +370,7 @@ export const renderQueue = (
     <div class="md">${resanitizeBodyHtml(c.body_html)}</div>
     ${auditStrip(latestAudit.get(c.id))}
   </td>
-  <td class="actions">${actionButtons(c.id, c.status)}</td>
+  <td class="actions">${actionButtons(c)}</td>
 </tr>`,
 				)
 				.join("")

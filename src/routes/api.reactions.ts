@@ -18,13 +18,10 @@ import { resolveActor } from "../lib/active-user";
 import { requireIpHash } from "../lib/ip-hash";
 import { checkRateLimit } from "../lib/ratelimit";
 import { writeEvent } from "../lib/analytics";
-import { loadFlags } from "../lib/settings";
+import { loadSettings, reactionKinds } from "../lib/settings";
 import { bustTreeCache } from "../lib/tree-cache";
 import { FALLBACK_LOCALE, tFor } from "../i18n";
 import type { LocaleVars } from "../lib/locale";
-// The vocabulary is the widget's, imported rather than restated: a hand-copied
-// set here is a set that silently disagrees with the buttons the reader sees.
-import { REACTION_KIND_SET } from "../widget/reactions";
 
 const reactions = new Hono<{ Bindings: Bindings; Variables: LocaleVars }>();
 
@@ -38,7 +35,7 @@ reactions.post("/", async (c) => {
 	// renders `json.error` verbatim, so this is what makes the error match the
 	// language the rest of the widget is in.
 	const t = c.get("t") ?? tFor(FALLBACK_LOCALE);
-	const flags = await loadFlags(c.env);
+	const { flags, texts } = await loadSettings(c.env);
 	if (!flags.reactions_enabled) {
 		return c.json({ error: "reactions_disabled" }, 403);
 	}
@@ -49,7 +46,10 @@ reactions.post("/", async (c) => {
 	const comment_id = (body.comment_id ?? "").trim();
 	const kind = (body.kind ?? "").trim();
 	if (!comment_id) return c.json({ error: t("err.not_found") }, 400);
-	if (!REACTION_KIND_SET.has(kind)) {
+	// The operator's enabled list, not the whole vocabulary: a kind turned off
+	// in Settings has no button, so a POST for it is a script, not a reader.
+	// Its stored rows are left alone and still counted on read.
+	if (!reactionKinds(texts, "comment_reaction_kinds").includes(kind)) {
 		return c.json({ error: "invalid_kind" }, 400);
 	}
 

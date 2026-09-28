@@ -74,6 +74,7 @@ export const pt = {
 	"w.email_ph": "nome@example.com",
 	"w.email_label": "Endereço de e-mail",
 	"w.notify": "Avisar por e-mail sobre novos comentários",
+	"w.post_as_staff": "Publicar como equipe",
 	"w.post_comment": "Publicar comentário",
 	"w.post_reply": "Publicar resposta",
 	"w.reply_ph": "Responder a @{name}…",
@@ -97,6 +98,8 @@ export const pt = {
 
 	// ── A comment ───────────────────────────────────────────────────────────
 	"w.verified": "verificado",
+	"w.pinned": "fixado",
+	"w.staff": "Equipe",
 	"w.edited": "· editado",
 	// "Pendente de aprovação" reads in both variants; "Aguardando aprovação" is
 	// the Brazilian gerund and "A aguardar aprovação" the European one.
@@ -137,6 +140,12 @@ export const pt = {
 	"w.react.laugh": "Engraçado",
 	"w.react.hmm": "Hmm",
 	"w.react.cry": "Triste",
+	"w.react.thumbsup": "Concordo",
+	"w.react.party": "Viva",
+	"w.react.eyes": "Atento",
+	"w.react.thanks": "Obrigado",
+	"w.react.rocket": "Empolgante",
+	"w.react.hundred": "Exato",
 
 	// ── The thread ──────────────────────────────────────────────────────────
 	"w.replies": { one: "{n} resposta", other: "{n} respostas" },

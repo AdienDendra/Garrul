@@ -351,6 +351,10 @@ kbd { background: var(--surface-2); border: 1px solid var(--border);
 .field-stack { display: flex; flex-direction: column; gap: 0.4rem;
                padding: 0.6rem 0; border-bottom: 1px solid var(--border); }
 .field-stack:last-child { border-bottom: 0; }
+.kind-chips { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.25rem; }
+.kind-chip { display: flex; align-items: center; gap: 0.5rem; }
+.kind-chip label { display: flex; align-items: center; gap: 0.4rem; flex: 1; }
+.kind-chip button { padding: 0.1rem 0.5rem; }
 .switch-row { cursor: pointer; }
 .field-text { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
 .field-text .muted { font-size: 0.8rem; }

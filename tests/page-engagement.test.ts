@@ -181,7 +181,7 @@ const kvNull = {
 	delete: async () => {},
 };
 
-const mkApp = (flags: Record<string, boolean>) => {
+const mkApp = (flags: Record<string, boolean>, texts: Record<string, string> = {}) => {
 	const app = new Hono<{ Bindings: Record<string, unknown> }>();
 	app.route("/", pageEngagement);
 	const { db } = makeDb();
@@ -206,7 +206,7 @@ const mkApp = (flags: Record<string, boolean>) => {
 						// Every group the shape guard knows about has to be present
 						// or the blob is rejected as stale and the flags above are
 						// silently re-derived from the (empty) DB.
-						texts: {},
+						texts: { ...texts },
 					}
 				: null,
 		put: async () => {},
@@ -393,5 +393,40 @@ describe("page engagement — string votes and the per-IP budget", () => {
 		} finally {
 			uninstallMockCaches();
 		}
+	});
+});
+
+describe("page reactions — only the operator's enabled kinds", () => {
+	it("400s a known kind the operator turned off", async () => {
+		const { app, env } = mkApp({ page_reactions_enabled: true }, { page_reaction_kinds: "fire,love" });
+		const res = await post(app, env, "/reactions", { slug: "p", kind: "cry" }, "10.0.4.1");
+		expect(res.status).toBe(400);
+		expect(((await res.json()) as { error: string }).error).toBe("invalid_kind");
+	});
+
+	it("accepts an opt-in kind once enabled", async () => {
+		const { app, env } = mkApp({ page_reactions_enabled: true }, { page_reaction_kinds: "rocket" });
+		const res = await post(app, env, "/reactions", { slug: "p", kind: "rocket" }, "10.0.4.2");
+		expect(res.status).toBe(200);
+		expect(((await res.json()) as { reactions: Record<string, number> }).reactions).toEqual({ rocket: 1 });
+	});
+
+	// Deliberate: the same POST that would toggle the earlier reaction off is
+	// refused once the kind is disabled. The stored row stays counted.
+	it("400s toggling off a kind the operator disabled after it was used", async () => {
+		const texts: Record<string, string> = { page_reaction_kinds: "rocket" };
+		const { app, env } = mkApp({ page_reactions_enabled: true }, texts);
+		const body = { slug: "p", kind: "rocket" };
+		expect((await post(app, env, "/reactions", body, "10.0.4.4")).status).toBe(200);
+		texts.page_reaction_kinds = "fire";
+		const res = await post(app, env, "/reactions", body, "10.0.4.4");
+		expect(res.status).toBe(400);
+		expect(((await res.json()) as { error: string }).error).toBe("invalid_kind");
+	});
+
+	it("does not consult the comment list", async () => {
+		const { app, env } = mkApp({ page_reactions_enabled: true }, { comment_reaction_kinds: "rocket" });
+		const res = await post(app, env, "/reactions", { slug: "p", kind: "rocket" }, "10.0.4.3");
+		expect(res.status).toBe(400);
 	});
 });

@@ -57,6 +57,7 @@ export const nl = {
 	// First person ("mij"), not second — it keeps the checkbox out of the u/je
 	// choice while still reading as the reader's own request.
 	"w.notify": "Mij e-mailen bij nieuwe reacties",
+	"w.post_as_staff": "Plaatsen als team",
 	"w.post_comment": "Reactie plaatsen",
 	"w.post_reply": "Antwoord plaatsen",
 	"w.reply_ph": "Antwoord aan @{name}…",
@@ -79,6 +80,8 @@ export const nl = {
 
 	// ── A comment ───────────────────────────────────────────────────────────
 	"w.verified": "geverifieerd",
+	"w.pinned": "vastgezet",
+	"w.staff": "Team",
 	"w.edited": "· bewerkt",
 	"w.pending": "Wacht op goedkeuring",
 	"w.removed_by_mod": "[verwijderd door een moderator]",
@@ -117,6 +120,12 @@ export const nl = {
 	"w.react.hmm": "Hmm",
 	// "Triest" over the longer "Verdrietig" — six of these share one row.
 	"w.react.cry": "Triest",
+	"w.react.thumbsup": "Eens",
+	"w.react.party": "Hoera",
+	"w.react.eyes": "Benieuwd",
+	"w.react.thanks": "Bedankt",
+	"w.react.rocket": "Spannend",
+	"w.react.hundred": "Precies",
 
 	// ── The thread ──────────────────────────────────────────────────────────
 	"w.replies": { one: "{n} antwoord", other: "{n} antwoorden" },

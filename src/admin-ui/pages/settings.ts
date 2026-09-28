@@ -4,13 +4,17 @@ import { AUTO_LOCALE } from "../../i18n/negotiate";
 import {
 	type FlagKey,
 	type NumberKey,
+	type ReactionKindsKey,
 	type ResolvedFlags,
 	type ResolvedNumbers,
 	type ResolvedStrings,
 	type ResolvedTexts,
 	MAX_TEXT_SETTING_CHARS,
+	STAFF_BADGE_LABEL_MAX,
 	TEXT_KEYS,
+	isReactionKindsKey,
 	numberBounds,
+	reactionKinds,
 } from "../../lib/settings";
 import {
 	MAX_TERMS,
@@ -18,6 +22,7 @@ import {
 	MAX_WILDCARDS,
 } from "../../lib/spam/blocklist";
 import { REACTION_KINDS } from "../../widget/reactions";
+import { EN } from "../../widget/strings";
 import {
 	renderSelect,
 	renderStepper,
@@ -27,10 +32,47 @@ import {
 } from "../controls";
 import { escapeHtml, jsLiteralRaw } from "../escape";
 
-// Read off the vocabulary rather than spelled out. The hand-written version
-// outlived the v2.10.0 `like` → `fire` rename by a release and only ever named
-// five of the six kinds; derived, the next rename updates this help text itself.
-const REACTION_GLYPHS = REACTION_KINDS.map((r) => r.emoji).join(" ");
+// Glyph + English label per kind, seeded into Alpine for the chip lists.
+// English only, like the rest of the admin UI; derived from the vocabulary so
+// a new kind shows up here without an edit.
+const VOCAB_SEED = JSON.stringify(
+	Object.fromEntries(
+		REACTION_KINDS.map((r) => [r.kind, { emoji: r.emoji, label: EN[r.labelKey] as string }]),
+	),
+);
+
+// One surface's chip list. The canonical value stays the comma-joined string
+// in texts.<key> (the hidden input), so save() posts it like any text setting
+// and the server's strict check (canonicalReactionKinds) is the only gate.
+const renderKindChips = (key: ReactionKindsKey, label: string, help: string): string => `
+<div class="field-stack">
+  <span class="field-text">
+    <strong>${escapeHtml(label)}</strong>
+    <span class="muted">${help}</span>
+  </span>
+  <input type="hidden" name="${key}" x-model="texts.${key}">
+  <ul class="kind-chips">
+    <template x-for="kind in chipOrder('${key}')" :key="kind">
+      <li class="kind-chip">
+        <label>
+          <input type="checkbox" :checked="kindOn('${key}', kind)"
+                 :disabled="kindOn('${key}', kind) &amp;&amp; kindsOf('${key}').length === 1"
+                 @change="toggleKind('${key}', kind)">
+          <span aria-hidden="true" x-text="vocab[kind].emoji"></span>
+          <span x-text="vocab[kind].label"></span>
+        </label>
+        <button type="button" class="btn-secondary" x-show="kindOn('${key}', kind)"
+                :disabled="kindsOf('${key}').indexOf(kind) === 0"
+                :aria-label="'Move ' + vocab[kind].label + ' earlier'"
+                @click="moveKind('${key}', kind, -1)">↑</button>
+        <button type="button" class="btn-secondary" x-show="kindOn('${key}', kind)"
+                :disabled="kindsOf('${key}').indexOf(kind) === kindsOf('${key}').length - 1"
+                :aria-label="'Move ' + vocab[kind].label + ' later'"
+                @click="moveKind('${key}', kind, 1)">↓</button>
+      </li>
+    </template>
+  </ul>
+</div>`;
 
 // Settings tabs. Email / Moderation tabs can slot in here later without
 // touching the panel-toggle wiring (each panel just keys off `tab`).
@@ -52,7 +94,7 @@ const FLAG_META: { key: FlagKey; label: string; help: string }[] = [
 	{
 		key: "reactions_enabled",
 		label: "Emoji reactions (comments)",
-		help: `Per-comment emoji reactions (${REACTION_GLYPHS}).`,
+		help: "Per-comment emoji reactions. Choose which emoji, and their order, under Reaction emoji below.",
 	},
 	{
 		key: "votes_enabled",
@@ -393,6 +435,29 @@ export const renderSettings = (
 		placeholder: "security@example.com",
 	});
 
+	const staffLabelTextarea = renderTextarea({
+		name: "staff_badge_label",
+		model: "texts.staff_badge_label",
+		label: "Staff badge label",
+		help: `Shown next to a moderator's name on comments they chose to post as
+		staff. Empty (the default) uses the reader's language — "Staff" in
+		English. Up to ${STAFF_BADGE_LABEL_MAX} characters.`,
+		rows: 1,
+		maxlength: STAFF_BADGE_LABEL_MAX,
+		placeholder: "Staff",
+	});
+
+	const commentKindChips = renderKindChips(
+		"comment_reaction_kinds",
+		"Comment reaction emoji",
+		"Which emoji readers can leave on a comment, left to right. Signed-in readers see every enabled emoji on every comment, so more than about six gets crowded. Turning one off hides it; reactions already left are kept and reappear if you turn it back on. At least one stays on — use the switch above to turn reactions off.",
+	);
+	const pageKindChips = renderKindChips(
+		"page_reaction_kinds",
+		"Page reaction emoji",
+		"Which emoji the article bar offers, left to right. Each shows with its label, so a long list wraps onto more lines. Only used while Page reactions is on.",
+	);
+
 	const initial = JSON.stringify(
 		Object.fromEntries(ALL_FLAG_META.map((f) => [f.key, flags[f.key]])),
 	);
@@ -407,7 +472,10 @@ export const renderSettings = (
 	// x-data blob — JSON.stringify leaves U+2028/U+2029 raw, and those are line
 	// terminators that end the string literal inside the Alpine expression.
 	const textInitial = `{${TEXT_KEYS.map(
-		(k) => `${jsLiteralRaw(k)}:${jsLiteralRaw(texts[k])}`,
+		// Reaction lists seed from the lenient read, not the raw row: one junk
+		// stored kind would otherwise fail every unrelated save with a 400.
+		(k) =>
+			`${jsLiteralRaw(k)}:${jsLiteralRaw(isReactionKindsKey(k) ? reactionKinds(texts, k).join(",") : texts[k])}`,
 	).join(",")}}`;
 
 	return `
@@ -418,6 +486,35 @@ export const renderSettings = (
   nums: ${escapeHtml(numInitial)},
   strs: ${escapeHtml(strInitial)},
   texts: ${escapeHtml(textInitial)},
+  vocab: ${escapeHtml(VOCAB_SEED)},
+  // The enabled kinds for one surface, parsed from its comma-joined text
+  // value. hasOwnProperty, not 'in': a hand-edited row naming 'constructor'
+  // must not reach vocab[kind].emoji.
+  kindsOf(key) {
+    return this.texts[key].split(',').map((k) => k.trim())
+      .filter((k, i, a) => Object.prototype.hasOwnProperty.call(this.vocab, k) && a.indexOf(k) === i);
+  },
+  kindOn(key, kind) { return this.kindsOf(key).includes(kind); },
+  // Enabled kinds in their saved order, then the rest in vocabulary order.
+  chipOrder(key) {
+    const on = this.kindsOf(key);
+    return [...on, ...Object.keys(this.vocab).filter((k) => !on.includes(k))];
+  },
+  toggleKind(key, kind) {
+    const l = this.kindsOf(key);
+    const i = l.indexOf(kind);
+    if (i === -1) l.push(kind);
+    else if (l.length > 1) l.splice(i, 1);
+    this.texts[key] = l.join(',');
+  },
+  moveKind(key, kind, d) {
+    const l = this.kindsOf(key);
+    const i = l.indexOf(kind);
+    const j = i + d;
+    if (i === -1 || j < 0 || j >= l.length) return;
+    [l[i], l[j]] = [l[j], l[i]];
+    this.texts[key] = l.join(',');
+  },
   hasFormTsSecret: ${hasFormTsSecret},
   // Deliberately just a line count, not a re-implementation of the matcher's
   // parse rules: a second copy of the grammar in Alpine would drift from the
@@ -492,6 +589,8 @@ export const renderSettings = (
       …); "Reset to defaults" clears the overrides so the env vars / built-in
       defaults apply again.</p>
       ${toggles}
+      <h3>Reaction emoji</h3>
+      ${commentKindChips}${pageKindChips}
     </div>
 
     <div class="card" x-show="tab === 'display'" x-cloak>
@@ -531,6 +630,7 @@ export const renderSettings = (
       <input type="hidden" name="auto_close_at" x-model.number="nums.auto_close_at"
              min="${numberBounds("auto_close_at").min}"
              max="${numberBounds("auto_close_at").max}">
+      ${staffLabelTextarea}
     </div>
 
     <div class="card" x-show="tab === 'moderation'" x-cloak>

@@ -24,6 +24,7 @@ import type { Bindings } from "../index";
 import { COMMENT_SORTS, getAllSettings } from "../db/queries";
 import { LOCALES } from "../i18n";
 import { AUTO_LOCALE } from "../i18n/negotiate";
+import { DEFAULT_REACTION_KINDS, REACTION_KIND_SET } from "../widget/reactions";
 import { MAX_DEPTH } from "./tree";
 
 export type FlagKey =
@@ -62,7 +63,18 @@ export type StringSettingKey = "default_locale" | "default_sort";
 
 export type ResolvedStrings = Record<StringSettingKey, string>;
 
-export type TextSettingKey = "spam_blocklist" | "security_contact";
+/** The two ordered-list text settings: which reaction kinds each surface offers. */
+export const REACTION_KINDS_KEYS = [
+	"comment_reaction_kinds",
+	"page_reaction_kinds",
+] as const;
+export type ReactionKindsKey = (typeof REACTION_KINDS_KEYS)[number];
+
+export type TextSettingKey =
+	| "spam_blocklist"
+	| "security_contact"
+	| "staff_badge_label"
+	| ReactionKindsKey;
 
 export type ResolvedTexts = Record<TextSettingKey, string>;
 
@@ -360,6 +372,9 @@ export const STRING_KEYS = Object.keys(STRINGS) as StringSettingKey[];
  */
 export const MAX_TEXT_SETTING_CHARS = 20_000;
 
+/** Cap on the staff badge label: it sits inline next to a commenter's name. */
+export const STAFF_BADGE_LABEL_MAX = 32;
+
 // Free-form text settings. Same precedence chain as everything above
 // (DB > env > default), but neither clamped nor whitelisted — see
 // MAX_TEXT_SETTING_CHARS for why boundedness is the invariant instead.
@@ -369,7 +384,14 @@ export const MAX_TEXT_SETTING_CHARS = 20_000;
 // grammar would then need a cache-shape migration to take effect; a raw string
 // re-parsed downstream costs microseconds and can never go stale against the
 // code that reads it.
-const TEXTS: Record<TextSettingKey, { env: keyof Bindings; default: string }> = {
+//
+// `env` is optional and `max` overrides the global MAX_TEXT_SETTING_CHARS cap
+// per key — added for staff_badge_label, which is DB-only (no env var) and
+// far shorter than a muted-words list.
+const TEXTS: Record<
+	TextSettingKey,
+	{ env?: keyof Bindings; default: string; max?: number }
+> = {
 	// Operator-maintained muted-words list, one term per line. Empty by default:
 	// this is a moderation policy, and an upgrade must never start holding
 	// comments against a list the operator didn't write.
@@ -379,9 +401,65 @@ const TEXTS: Record<TextSettingKey, { env: keyof Bindings; default: string }> = 
 	// 404 until the operator opts in, because a Contact field is the one thing
 	// the RFC makes mandatory and inventing one would point researchers nowhere.
 	security_contact: { env: "SECURITY_CONTACT", default: "" },
+	// Operator wording for the widget's staff badge. Empty (the default) means
+	// "use the reader's locale string", so the badge stays translated until an
+	// operator deliberately picks one word for everyone. No env var: this is
+	// presentation, set from the Settings page, and a deploy-time default would
+	// cost an env name across every install doc for no operator benefit.
+	staff_badge_label: { default: "", max: STAFF_BADGE_LABEL_MAX },
+	// Which reaction kinds each surface offers, in render order, as a
+	// comma-separated list of vocabulary kinds (src/widget/reactions.ts).
+	// Stored raw like the rest of this group and normalized at use by
+	// `reactionKinds`, so a row naming a kind a later release drops still
+	// resolves to the kinds that remain.
+	//
+	// No env var, deliberately: an env name costs a config-registry entry, a
+	// manifest bump and a docs-gate update, for a list nobody pins per deploy.
+	// The Settings page is the only writer and Reset restores the default —
+	// the six kinds every install shipped with, so an upgrade renders exactly
+	// what it rendered before.
+	comment_reaction_kinds: { default: DEFAULT_REACTION_KINDS.join(",") },
+	page_reaction_kinds: { default: DEFAULT_REACTION_KINDS.join(",") },
 };
 
 export const TEXT_KEYS = Object.keys(TEXTS) as TextSettingKey[];
+
+export const isReactionKindsKey = (key: string): key is ReactionKindsKey =>
+	(REACTION_KINDS_KEYS as readonly string[]).includes(key);
+
+/**
+ * Save-path check for a reaction-kind list. Strict, like the string
+ * whitelist: every entry must be a known kind and there must be at least
+ * one. A stale admin page must not quietly save a different list than the
+ * one it shows. Repeats are folded rather than rejected — they are harmless
+ * and the chip UI can't produce them. Returns the canonical form, or null.
+ */
+export const canonicalReactionKinds = (raw: string): string | null => {
+	const parts = raw.split(",").map((k) => k.trim());
+	if (parts.some((k) => !REACTION_KIND_SET.has(k))) return null;
+	return [...new Set(parts)].join(",");
+};
+
+/**
+ * The enabled kinds for one surface, in the operator's order. Lenient,
+ * because a resolver has nobody to report to: unknown kinds and repeats are
+ * dropped, and an empty result means the default. `undefined` is a real
+ * input — a settings blob cached by the previous release has no such key.
+ */
+export const reactionKinds = (
+	texts: ResolvedTexts,
+	key: ReactionKindsKey,
+): string[] => {
+	const raw = (texts[key] as string | undefined) ?? "";
+	const kinds = [...new Set(raw.split(",").map((k) => k.trim()))].filter((k) =>
+		REACTION_KIND_SET.has(k),
+	);
+	return kinds.length > 0 ? kinds : [...DEFAULT_REACTION_KINDS];
+};
+
+/** Per-key length cap for a text setting (save path rejects, resolver truncates). */
+export const textMax = (key: TextSettingKey): number =>
+	TEXTS[key].max ?? MAX_TEXT_SETTING_CHARS;
 
 /** The accepted values for a string setting (used by the admin UI + save path). */
 export const stringOptions = (key: StringSettingKey): string[] =>
@@ -487,13 +565,12 @@ export const parseStringSetting = (
 export const parseTextSetting = (
 	raw: string | undefined,
 	fallback: string,
+	max = MAX_TEXT_SETTING_CHARS,
 ): string => {
 	if (raw == null) return fallback;
 	const v = raw.trim();
 	if (v === "") return fallback;
-	return v.length > MAX_TEXT_SETTING_CHARS
-		? v.slice(0, MAX_TEXT_SETTING_CHARS)
-		: v;
+	return v.length > max ? v.slice(0, max) : v;
 };
 
 const resolveTexts = (
@@ -506,8 +583,10 @@ const resolveTexts = (
 		const raw =
 			key in dbSettings
 				? dbSettings[key]
-				: (env[spec.env] as string | undefined);
-		out[key] = parseTextSetting(raw, spec.default);
+				: spec.env
+					? (env[spec.env] as string | undefined)
+					: undefined;
+		out[key] = parseTextSetting(raw, spec.default, textMax(key));
 	}
 	return out;
 };
@@ -646,7 +725,17 @@ export const loadSettings = async (
 	const cached = await env.TREE_CACHE.get(CACHE_KEY_RESOLVED, "json").catch(
 		() => null,
 	);
-	if (isResolvedSettings(cached)) return cached;
+	if (isResolvedSettings(cached)) {
+		// A blob cached by the previous release lacks any text key added since.
+		// It lives up to the TTL after a deploy, so fill the gaps with defaults
+		// here, once, rather than make every caller tolerate `undefined`.
+		for (const key of TEXT_KEYS) {
+			if (typeof cached.texts[key] !== "string") {
+				(cached.texts as Record<string, string>)[key] = TEXTS[key].default;
+			}
+		}
+		return cached;
+	}
 	if (inFlight) return inFlight;
 	const pending = deriveSettings(env).finally(() => {
 		inFlight = null;
@@ -677,10 +766,10 @@ export const loadStrings = async (env: Bindings): Promise<ResolvedStrings> =>
 /**
  * Resolved free-form text settings.
  *
- * Deliberately *not* exposed through `GET /api/v1/config`: the muted-words list
- * is moderation policy, and handing it to the widget would publish the operator's
- * blocklist to anyone who can read a network tab — which is a map of exactly what
- * to avoid typing.
+ * Not exposed through `GET /api/v1/config` as a group. The muted-words list is
+ * moderation policy and must not reach a network tab — it is a map of exactly
+ * what to avoid typing. The config route serves only the two reaction-kind
+ * lists, which are derived arrays.
  */
 export const loadTexts = async (env: Bindings): Promise<ResolvedTexts> =>
 	(await loadSettings(env)).texts;

@@ -27,7 +27,11 @@
 import { describe, it, expect } from "vitest";
 import { Hono } from "hono";
 import { admin } from "../src/routes/admin";
-import { MAX_TEXT_SETTING_CHARS } from "../src/lib/settings";
+import {
+	loadSettings,
+	MAX_TEXT_SETTING_CHARS,
+	STAFF_BADGE_LABEL_MAX,
+} from "../src/lib/settings";
 import type { Bindings } from "../src/index";
 
 // Real session ids are 64 lowercase hex chars (see newSessionId); readSession
@@ -397,6 +401,24 @@ describe("POST /admin/settings — text writes", () => {
 		expect(settingWrites(runs).map(([k]) => k)).toEqual(["spam_blocklist"]);
 	});
 
+	it("caps staff_badge_label at its own limit", async () => {
+		const { env, runs } = mkEnv();
+		const over = await postSettings(env, {
+			texts: { staff_badge_label: "x".repeat(STAFF_BADGE_LABEL_MAX + 1) },
+		});
+		expect(over.status).toBe(400);
+		expect(await over.json()).toEqual({ error: "text_too_long:staff_badge_label" });
+		expect(settingWrites(runs)).toEqual([]);
+		const at = await postSettings(env, {
+			texts: { staff_badge_label: ` ${"x".repeat(STAFF_BADGE_LABEL_MAX)} ` },
+		});
+		expect(at.status).toBe(200);
+		expect(settingWrites(runs)).toContainEqual([
+			"staff_badge_label",
+			"x".repeat(STAFF_BADGE_LABEL_MAX),
+		]);
+	});
+
 	// The audit log answers "who changed what, when" — it is not a revision
 	// store for a 20k-character moderation list, and a copy of every list an
 	// operator has ever typed is a liability, not a feature.
@@ -429,6 +451,7 @@ describe("POST /admin/settings — reset", () => {
 		expect(del!.binds).toContain("auto_collapse_depth");
 		expect(del!.binds).toContain("default_locale");
 		expect(del!.binds).toContain("spam_blocklist");
+		expect(del!.binds).toContain("comment_reaction_kinds");
 
 		expect(kv.deletedKeys).toContain("settings:resolved");
 	});
@@ -453,5 +476,77 @@ describe("POST /admin/settings — gate", () => {
 		expect(res.status).toBe(403);
 		const json = (await res.json()) as { error: string };
 		expect(json.error).toBe("origin_mismatch");
+	});
+});
+
+describe("POST /admin/settings — reaction kind lists", () => {
+	it("stores the canonical list, folding repeats", async () => {
+		const { env, kv, runs } = mkEnv();
+		const res = await postSettings(env, {
+			texts: { comment_reaction_kinds: " rocket, fire ,rocket" },
+		});
+		expect(res.status).toBe(200);
+		expect(settingWrites(runs)).toContainEqual(["comment_reaction_kinds", "rocket,fire"]);
+		expect(kv.deletedKeys).toContain("settings:resolved");
+	});
+
+	it("rejects an unknown kind with 400 and writes nothing", async () => {
+		const { env, runs } = mkEnv();
+		const res = await postSettings(env, { texts: { page_reaction_kinds: "fire,like" } });
+		expect(res.status).toBe(400);
+		expect(await res.json()).toEqual({ error: "invalid_reaction_kinds:page_reaction_kinds" });
+		expect(settingWrites(runs)).toEqual([]);
+	});
+
+	// Unlike the muted-words list, empty is not a value here: a surface with no
+	// kinds is what the reactions_enabled / page_reactions_enabled flags are for.
+	it("rejects an empty list", async () => {
+		const { env, runs } = mkEnv();
+		const res = await postSettings(env, { texts: { comment_reaction_kinds: "" } });
+		expect(res.status).toBe(400);
+		expect(await res.json()).toEqual({ error: "invalid_reaction_kinds:comment_reaction_kinds" });
+		expect(settingWrites(runs)).toEqual([]);
+	});
+});
+
+describe("GET /admin/settings — a settings blob cached by the previous release", () => {
+	const getSettings = (env: Bindings) =>
+		new Hono<{ Bindings: Bindings }>().route("/admin", admin).request(
+			"/admin/settings",
+			{ headers: { cookie: `__Host-garrul_sess=${SID}` } },
+			env as unknown as Record<string, unknown>,
+			execCtx as unknown as ExecutionContext,
+		);
+
+	// Derive a real blob, then shape it like one cached before the new text
+	// keys existed (or with a junk row) and put it where the loader reads.
+	const seedBlob = async (texts: (t: Record<string, string>) => void) => {
+		const { env, kv } = mkEnv();
+		const blob = JSON.parse(JSON.stringify(await loadSettings(env)));
+		texts(blob.texts);
+		kv.store.set("settings:resolved", JSON.stringify(blob));
+		return env;
+	};
+
+	it("renders 200 and the loader fills the missing keys with defaults", async () => {
+		const env = await seedBlob((t) => {
+			delete t.staff_badge_label;
+			delete t.comment_reaction_kinds;
+			delete t.page_reaction_kinds;
+		});
+		const { texts } = await loadSettings(env);
+		expect(texts.staff_badge_label).toBe("");
+		expect(texts.comment_reaction_kinds).toBe("fire,love,wow,laugh,hmm,cry");
+		expect(texts.page_reaction_kinds).toBe("fire,love,wow,laugh,hmm,cry");
+		expect((await getSettings(env)).status).toBe(200);
+	});
+
+	// Seeding the raw row would round-trip `bogus` on every save and 400 it.
+	it("seeds a reaction list from the lenient read, not the raw row", async () => {
+		const env = await seedBlob((t) => {
+			t.comment_reaction_kinds = "rocket,bogus";
+		});
+		const html = await (await getSettings(env)).text();
+		expect(html).toContain("&quot;comment_reaction_kinds&quot;:&quot;rocket&quot;");
 	});
 });

@@ -10,6 +10,7 @@ import {
 	buildSetupPrompts,
 	buildSetupGenerated,
 	buildSetupNextSteps,
+	buildSetupVarPrompts,
 	buildKvNamespaceBlocks,
 	buildSetupKvCreates,
 	buildD1Blocks,
@@ -386,6 +387,35 @@ describe("setup.sh next-steps block", () => {
 		expect(() => checkMustEditVars("[triggers]\ncrons = []\n")).toThrow(
 			/no \[vars\] table/,
 		);
+	});
+});
+
+describe("setup.sh var prompts", () => {
+	it("prompts for every mustEdit var and nothing else", () => {
+		const named = [...buildSetupVarPrompts().matchAll(/^\tprompt_var (\w+) /gm)].map(
+			(m) => m[1],
+		);
+		expect(named).toEqual(MUST_EDIT_VARS.map((e) => e.name));
+	});
+
+	// prompt_var defaults OAUTH_CALLBACK_BASE to the PUBLIC_BASE_URL answer, so
+	// a registry reshuffle that asked for it first would default to nothing.
+	it("asks for PUBLIC_BASE_URL before OAUTH_CALLBACK_BASE", () => {
+		const prompts = buildSetupVarPrompts();
+		expect(prompts.indexOf("prompt_var PUBLIC_BASE_URL ")).toBeLessThan(
+			prompts.indexOf("prompt_var OAUTH_CALLBACK_BASE "),
+		);
+	});
+
+	it("emits nothing executable but prompt_var", () => {
+		const offenders = buildSetupVarPrompts()
+			.split("\n")
+			.filter((line) => !/^\t(#|prompt_var )/.test(line));
+		expect(offenders).toEqual([]);
+	});
+
+	it("is the state the committed script is in", () => {
+		expect(read("scripts/setup.sh")).toContain(buildSetupVarPrompts());
 	});
 });
 

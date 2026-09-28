@@ -74,6 +74,7 @@ export const EN = {
 	// wording ("on new replies") promised per-reply scoping the schema does not
 	// have; say what actually arrives rather than under-deliver on the label.
 	"w.notify": "Email me about new comments",
+	"w.post_as_staff": "Post as staff",
 	"w.post_comment": "Post comment",
 	"w.post_reply": "Post reply",
 	"w.reply_ph": "Reply to @{name}…",
@@ -96,6 +97,8 @@ export const EN = {
 
 	// ── A comment ───────────────────────────────────────────────────────────
 	"w.verified": "verified",
+	"w.pinned": "pinned",
+	"w.staff": "Staff",
 	"w.edited": "· edited",
 	"w.pending": "Pending approval",
 	"w.removed_by_mod": "[removed by a moderator]",
@@ -129,8 +132,8 @@ export const EN = {
 	"w.page.up": "Upvote this page",
 	"w.page.down": "Downvote this page",
 	"w.page.react_prompt": "What's your reaction?",
-	// One word each: these sit under a 🔥-sized emoji in a six-across row on the
-	// article bar, and double as the accessible name of the compact per-comment
+	// One word each: these sit under a 🔥-sized emoji in a row of up to twelve on
+	// the article bar, and double as the accessible name of the compact per-comment
 	// button. A phrase wraps and breaks the grid. The emoji carries the tone; the
 	// label only has to disambiguate it (🤔 is "Hmm", not "I doubt that").
 	"w.react.fire": "Brilliant",
@@ -139,6 +142,12 @@ export const EN = {
 	"w.react.laugh": "Funny",
 	"w.react.hmm": "Hmm",
 	"w.react.cry": "Sad",
+	"w.react.thumbsup": "Agree",
+	"w.react.party": "Hooray",
+	"w.react.eyes": "Watching",
+	"w.react.thanks": "Thanks",
+	"w.react.rocket": "Exciting",
+	"w.react.hundred": "Exactly",
 
 	// ── The thread ──────────────────────────────────────────────────────────
 	"w.replies": { one: "{n} reply", other: "{n} replies" },

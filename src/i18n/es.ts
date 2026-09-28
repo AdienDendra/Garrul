@@ -37,6 +37,8 @@ export const es = {
 	"err.delete.not_author": "Solo puedes eliminar tus propios comentarios.",
 	"err.not_found": "No encontrado.",
 	"err.banned": "Tu cuenta está bloqueada.",
+	"err.staff.forbidden":
+		"Solo el personal con sesión iniciada puede marcar un comentario como del personal.",
 	"err.thread_closed": "Los comentarios están cerrados en esta entrada.",
 	"err.internal": "Algo ha salido mal. Inténtalo de nuevo.",
 

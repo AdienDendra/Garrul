@@ -27,6 +27,7 @@ import {
 	enqueueNotification,
 	getOrCreateGhost,
 	getComment,
+	getPinnedThreadRef,
 	getPost,
 	getThreadCreatedAt,
 	getUser,
@@ -169,6 +170,8 @@ type CreateBody = {
 	post_published?: number | string | null;
 	form_ts?: string;
 	[HONEYPOT_FIELD]?: string;
+	/** Only a strict `true` counts; role-checked below. */
+	as_staff?: unknown;
 };
 
 // Upper bound for a host-supplied publish time (~year 2100), matching the
@@ -223,6 +226,7 @@ const serializeComment = (c: Comment, author: User) => {
 		deleted_at: c.deleted_at,
 		deleted_by: isDeleted ? c.deleted_by : null,
 		created_at: c.created_at,
+		...(c.as_staff === 1 && !isDeleted ? { staff: true as const } : {}),
 		// No `is_admin` here either — see the TreeAuthor comment in lib/tree.ts.
 		// This is the POST/PATCH echo of a single comment, but it's the same
 		// public surface and the widget renders both through one code path.
@@ -465,6 +469,14 @@ comments.post("/", async (c) => {
 
 	const session = await readSession(c);
 
+	// Only a strict `true` asks for the staff marker — `"true"` or `1` from a
+	// sloppy client is not a request. A caller with no session is refused here,
+	// before any budget, siteverify or ghost upsert: a ghost row is keyed on the
+	// IP hash alone, so if one were ever promoted, every anonymous poster behind
+	// that address would inherit its role.
+	const asStaff = body.as_staff === true;
+	if (asStaff && !session) return c.json({ error: t("err.staff.forbidden") }, 403);
+
 	// Anonymous path: name + Turnstile required on top of the rate limit.
 	let author: User;
 	const ipHash = await requireIpHash(c);
@@ -607,6 +619,12 @@ comments.post("/", async (c) => {
 		author = u;
 	}
 
+	// The staff marker is a claim about the author, so it is checked against
+	// the resolved author row and never trusted from the body.
+	if (asStaff && author.role !== "mod" && author.role !== "admin") {
+		return c.json({ error: t("err.staff.forbidden") }, 403);
+	}
+
 	// Validate the supplied post_url: http(s) and on an ALLOWED_ORIGINS origin,
 	// else null. Anything else (`javascript:`, `data:`, scheme-relative, an
 	// unrelated host) is dropped so the permalink redirect cannot be used as
@@ -709,6 +727,7 @@ comments.post("/", async (c) => {
 		ip_hash: ipHash,
 		user_agent: userAgent,
 		depth,
+		as_staff: asStaff,
 	});
 
 	// Bust the cached first page. Older pages bypass cache, so there's
@@ -1096,17 +1115,25 @@ export const buildTreePage = async (
 	});
 	const pageRefs = refs.slice(0, pageSize);
 	const more = refs.length > pageSize;
+	// The pinned thread rides on the first page only, ahead of the sort and on
+	// top of pageSize. listThreadRefsForPost excludes pinned rows everywhere, so
+	// it never repeats on a later page and never moves a cursor; next_cursor
+	// still comes from pageRefs below. `cursorKey === null` is "first page" —
+	// the same test the cache key uses, so a garbage cursor gets the pin too.
+	const pinnedRef =
+		cursorKey === null ? await getPinnedThreadRef(env.DB, slug) : null;
+	const shownRefs = pinnedRef ? [pinnedRef, ...pageRefs] : pageRefs;
 
 	const { rows, truncated } = await listCommentsForThreads(
 		env.DB,
-		pageRefs.map((r) => r.id),
+		shownRefs.map((r) => r.id),
 		viewerId,
 	);
 	if (truncated) {
 		log.warn("comments.page_truncated", {
 			post_slug: slug,
 			sort,
-			threads: pageRefs.length,
+			threads: shownRefs.length,
 			limit: TREE_ROW_LIMIT,
 		});
 	}
@@ -1147,7 +1174,7 @@ export const buildTreePage = async (
 	// SQL already ordered and sliced the threads; restore that order over the
 	// builder's output, which always comes back created_at ASC. Replies stay
 	// created_at ASC either way so threaded conversation reads top-down.
-	const rank = new Map(pageRefs.map((r, i) => [r.id, i]));
+	const rank = new Map(shownRefs.map((r, i) => [r.id, i]));
 	const page = allThreads.sort(
 		(a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0),
 	);

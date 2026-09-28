@@ -19,6 +19,7 @@ import {
 	getUser,
 	listPostSlugsForUser,
 	resolveReportsForComment,
+	setCommentPin,
 	setUserBanned,
 	updateCommentStatus,
 	type UserErasureCounts,
@@ -88,6 +89,40 @@ export const moderateComment = async (args: {
 		});
 	}
 	return { ok: true, id: commentId, status: newStatus };
+};
+
+/**
+ * Pin or unpin a comment on its post. Pinning requires an approved top-level
+ * comment — a reply has no place above the sort, and a hidden pin is a dead
+ * pin. Unpin has no precondition. One pin per post is the DB's invariant;
+ * setCommentPin swaps it in one batch.
+ */
+export const pinComment = async (args: {
+	env: Bindings;
+	reqUrl: string;
+	adminId: string;
+	commentId: string;
+	pin: boolean;
+}): Promise<
+	| { ok: true; id: string; pinned: boolean }
+	| { ok: false; error: "not_found" | "not_pinnable" }
+> => {
+	const { env, commentId, pin } = args;
+	const existing = await getComment(env.DB, commentId);
+	if (!existing) return { ok: false, error: "not_found" };
+	if (pin && (existing.parent_id !== null || existing.status !== "approved")) {
+		return { ok: false, error: "not_pinnable" };
+	}
+	await setCommentPin(env.DB, existing, pin);
+	await adminInsertAudit(env.DB, {
+		admin_id: args.adminId,
+		action: pin ? "comment.pin" : "comment.unpin",
+		target_kind: "comment",
+		target_id: commentId,
+		meta: { post_slug: existing.post_slug },
+	});
+	await bustTreeCache(env, args.reqUrl, existing.post_slug);
+	return { ok: true, id: commentId, pinned: pin };
 };
 
 /**

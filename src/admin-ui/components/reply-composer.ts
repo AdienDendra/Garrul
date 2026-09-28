@@ -58,6 +58,7 @@ export const replyComposer = (o: ReplyComposerOptions): string => {
 	return `<div class="reply-composer" x-data="{
   body: '',
   notify: true,
+  asStaff: true,
   busy: false,
   previewing: false,
   previewHtml: '',
@@ -133,7 +134,7 @@ export const replyComposer = (o: ReplyComposerOptions): string => {
       const r = await fetch('/admin/api/comments/' + ${o.commentIdExpr} + '/reply', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ body_md: this.body, saved_reply_id: this.savedReplyId, notify: this.notify }),
+        body: JSON.stringify({ body_md: this.body, saved_reply_id: this.savedReplyId, notify: this.notify, as_staff: this.asStaff }),
       });
       if (!r.ok) {
         const j = await r.json().catch(() => ({}));
@@ -205,6 +206,7 @@ ${
   </div>
   <p style="margin:0.5rem 0">
     <label><input type="checkbox" x-model="notify"> Notify thread subscribers by email</label>
+    <br><label><input type="checkbox" x-model="asStaff"> Reply as staff (shows a staff badge)</label>
   </p>
   <p>
     <button :disabled="busy || !body.trim()" @click="send()">Post reply</button>

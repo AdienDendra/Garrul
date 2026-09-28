@@ -78,3 +78,36 @@ describe("POST /admin/api/users/:id/role", () => {
 		expect(audits.map((a) => a.action)).toEqual(["role.revoke_admin"]);
 	});
 });
+
+describe("role change — staff marks", () => {
+	const seed = (sqlite: ReturnType<typeof setup>["sqlite"]) => {
+		sqlite.prepare("INSERT INTO posts (slug, created_at) VALUES ('p', 1)").run();
+		const add = sqlite.prepare(
+			`INSERT INTO comments (id, post_slug, user_id, body_md, body_html, created_at, as_staff)
+			 VALUES (?, 'p', ?, 'x', '<p>x</p>', 1, ?)`,
+		);
+		add.run("c-mod-staff", MOD_ID, 1);
+		add.run("c-mod-plain", MOD_ID, 0);
+		add.run("c-admin-staff", ADMIN_ID, 1);
+		return (id: string) =>
+			(sqlite.prepare("SELECT as_staff FROM comments WHERE id = ?").get(id) as { as_staff: number })
+				.as_staff;
+	};
+
+	it("demoting a mod to user clears their marks and nobody else's", async () => {
+		const { request, sqlite } = setup();
+		const flag = seed(sqlite);
+		const res = await request(`/admin/api/users/${MOD_ID}/role`, { method: "POST", body: { role: "user" } });
+		expect(res.status).toBe(200);
+		expect(flag("c-mod-staff")).toBe(0);
+		expect(flag("c-mod-plain")).toBe(0);
+		expect(flag("c-admin-staff")).toBe(1);
+	});
+
+	it("promoting a mod to admin keeps their marks", async () => {
+		const { request, sqlite } = setup();
+		const flag = seed(sqlite);
+		await request(`/admin/api/users/${MOD_ID}/role`, { method: "POST", body: { role: "admin" } });
+		expect(flag("c-mod-staff")).toBe(1);
+	});
+});

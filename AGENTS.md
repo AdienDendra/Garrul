@@ -153,6 +153,11 @@ rather than nulled — `engagement` unless a page-level reaction or vote
 surface is on, `subscription` unless the reader is signed in on an
 install configured to send mail.
 
+`&view=engagement` asks for the standalone reactions bar's slice only —
+`config`, `user` and (when a page flag is on) `engagement`, each still
+byte-identical to its endpoint. No `comments`, no `subscription`, no tree
+read. Any other `view` value is `400 {"error":"invalid_view"}`.
+
 Before v2.15.0 the mount cost up to five requests, in two serial
 waves: `/api/v1/config` had to be fully awaited (the tree request
 needs the resolved locale) before `/api/v1/auth/me` and
@@ -296,6 +301,7 @@ Every attribute the widget reads from the `#garrul` host element
 | `data-url`   | no       | Canonical permalink; sent on every comment create (top-level and reply). The first non-null value wins and later values are ignored. Used in RSS and notification emails. |
 | `data-published` | no   | Article publish time (epoch ms or ISO 8601). On the iframe variant pass it as `?published=` (§6). The widget sends it as `post_published` on every comment create (top-level and reply); the server records it only on the request that creates the post row and never changes it after that — it arrives on an unauthenticated POST, and an old enough value closes the thread for good, so a later request cannot supply or move it. Anchors age-based auto-close (`AUTO_CLOSE_DAYS`). Omit it and Garrul anchors on first-engagement time, which closes a bit later than intended. If a reaction, page vote or admin action created the row before the first comment, the slug keeps that first-engagement anchor. Repair today is direct D1 SQL on `posts.published_at`; an admin edit surface is a separate backlog item. |
 | `data-lang`  | no       | BCP-47 tag pinning the widget's interface language (see "Language" below). Unrecognized tags fall back to English rather than erroring. |
+| `data-mode`  | no       | `reactions` mounts only the page-level reactions/votes bar (no thread, no composer) in one request (`/api/v1/bootstrap?…&view=engagement`). Needs `PAGE_REACTIONS_ENABLED` and/or `PAGE_VOTES_ENABLED`; with both off it renders nothing and logs one console warning. Any other value is the normal thread. |
 
 The host element MUST have `id="garrul"`; the widget looks it up by ID
 and mounts a Shadow DOM on it. One widget per page — multi-thread
@@ -435,7 +441,10 @@ and a sort selector above the list. Neither needs any host-page wiring:
 - **Anonymous viewers can vote.** They use the same IP-hashed ghost
   identity as anonymous comments — one vote per identity per comment.
   Authors cannot vote on their own comments.
-- **Reaction kinds** are `fire|love|wow|laugh|hmm|cry` (🔥❤️😮😂🤔😢).
+- **Reaction kinds** are `fire|love|wow|laugh|hmm|cry` (🔥❤️😮😂🤔😢) by
+  default, plus six opt-in kinds `thumbsup|party|eyes|thanks|rocket|hundred`
+  (👍🎉👀🙏🚀💯, since v2.30.0) that an operator enables per surface — see
+  *Configurable reaction kinds*.
   **Changed in v2.10.0:** `like` 👍 was renamed to `fire` 🔥 (it duplicated
   the up-vote sitting directly below it) and `wow` was added. Migration
   0022 rewrites stored rows in both `reactions` and `page_reactions`, so
@@ -531,6 +540,25 @@ writing a comment. Both surfaces default **off** and are server-gated:
   emoji, so 🤔 isn't left ambiguous between "interesting" and "I doubt
   that". Per-comment reactions stay compact — same label, but as the
   button's accessible name rather than visible text.
+- **Standalone bar** (`data-mode="reactions"`): the same bar without the
+  thread — for pages that want reactions but no comments. Same slug, same
+  counts as the bar atop that slug's thread. One `#garrul` per page, so a
+  page carries either the bar or the thread (which already includes it).
+  Iframe: `/embed/<slug>?mode=reactions`.
+
+### Configurable reaction kinds (since v2.30.0)
+
+- Admin → Settings → Features picks which kinds each surface offers and in
+  what order: `comment_reaction_kinds` and `page_reaction_kinds`, any 1–12 of
+  the vocabulary. Default: `fire,love,wow,laugh,hmm,cry` — an upgrade renders
+  exactly what it did before. DB-only settings: there is no env var.
+- `GET /api/v1/config` (and bootstrap's `config`) carries
+  `reaction_kinds: string[]` and `page_reaction_kinds: string[]`.
+- Both POST routes answer `400 invalid_kind` for a kind outside that
+  surface's list. Rows of a disabled kind are kept; read endpoints still
+  return their counts, and the widget renders only enabled kinds.
+- The widget reads both lists once at mount; a Worker that predates them
+  sends neither, and the bundle falls back to the default six.
 
 ### Subscribing to a thread (since v2.10.0)
 
@@ -777,6 +805,28 @@ see AGENTS-OPERATE.md §5) control the volume:
   stay repliable up to the cap. Do not infer reply eligibility from a node's
   `depth` — past the flatten point every node reports `depth: 4` regardless of
   how deep it actually is.
+
+- **Pinned comment.** A moderator can pin one approved top-level comment per
+  post. Page one of the list (and bootstrap) carries it first, marked
+  `"pinned": true`, as an extra thread on top of `comments_per_page`; no other
+  node carries the key. Later pages never include it and cursors are
+  unaffected. A pinned comment that is hidden stops being served as the pin
+  and pages normally; re-approving it restores the pin.
+
+- **Staff badge (opt-in per comment).** `POST /api/v1/comments` accepts
+  `as_staff: true` only from a signed-in `mod`/`admin` session; anyone else
+  gets `403 {"error":"forbidden"}`. A caller with no session is refused before
+  any rate limit, Turnstile check or ghost upsert, whatever role its IP's ghost
+  row holds. Anything but a strict `true` is ignored.
+  A marked comment carries `staff: true` in the list response and the
+  POST/PATCH echo; an unmarked one has no `staff` key, and neither does a
+  deleted placeholder. Authors never carry `role` or `is_admin` — only a
+  comment its author chose to mark reveals a role. Edits never change the
+  mark; demoting the author to `user` clears all of theirs (cached pages
+  catch up within 60 s).
+  The widget shows it as a `.gr-staff` pill beside the name, worded by the
+  operator's `staff_badge_label` (config; null → the locale's `w.staff`).
+  Signed-in mods/admins get an unchecked *Post as staff* box in both composers.
 
 Reply collapsing is **purely client-side** — the replies arrive in the single
 list response and the widget folds them. There is no `data-*` per-page

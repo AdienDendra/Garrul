@@ -48,6 +48,7 @@ Every recipe boils down to a mount element plus the `embed.js` script:
 | `data-title`     | Human-readable title shown in email digests and the per-post RSS feed.                                                                |
 | `data-url`       | Canonical permalink for the post. Reflected back in email digests and used to build per-comment permalinks (`/c/:id`).               |
 | `data-published` | Optional. The post's publish time (ISO 8601 or epoch ms). Anchors age-based auto-close (`AUTO_CLOSE_DAYS`); recorded once, on the request that creates the post row. Omit it and the anchor is first-engagement time. |
+| `data-mode`      | Optional. `reactions` mounts only the page-level reactions/votes bar — no thread, no composer. Needs `PAGE_REACTIONS_ENABLED` or `PAGE_VOTES_ENABLED`. See [`../docs/embedding.md`](../docs/embedding.md#reactions-bar-only). |
 
 The widget mounts inside a Shadow DOM, so host CSS does not leak in. The
 `plain-html/` example includes a "host-bleed-check" block you can use to

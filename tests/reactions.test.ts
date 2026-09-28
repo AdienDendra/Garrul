@@ -19,7 +19,7 @@ import { installMockCaches, uninstallMockCaches } from "./helpers/mock-caches";
 const COMMENT_ID = "01HC000000000000000000ABCD";
 const GHOST_ID = "01HU000000000000000000";
 
-const makeDb = (status: string) => ({
+const makeDb = (status: string, settings: Record<string, string> = {}) => ({
 	prepare: (sql: string) => ({
 		bind() {
 			return this;
@@ -68,6 +68,11 @@ const makeDb = (status: string) => ({
 			return null;
 		},
 		async all() {
+			if (sql.includes("FROM settings")) {
+				return {
+					results: Object.entries(settings).map(([key, value]) => ({ key, value })),
+				};
+			}
 			// The per-comment aggregate the route now sends back so the widget
 			// can patch in place. Two kinds, one of them not the one being
 			// toggled, so a test can tell a real aggregate from an echo.
@@ -98,11 +103,11 @@ const makeKv = () => ({
 	async delete() {},
 });
 
-const mkApp = (status = "approved") => {
+const mkApp = (status = "approved", settings: Record<string, string> = {}) => {
 	const app = new Hono<{ Bindings: Record<string, unknown> }>();
 	app.route("/r", reactions);
 	const env = {
-		DB: makeDb(status),
+		DB: makeDb(status, settings),
 		TREE_CACHE: makeKv(),
 		SESSIONS: makeKv(),
 		ANALYTICS: { writeDataPoint: () => {} },
@@ -235,5 +240,47 @@ describe("POST /reactions — only approved comments are reactable", () => {
 		};
 		expect(body.added).toBe(true);
 		expect(body.reactions).toEqual({ fire: 3, love: 1 });
+	});
+});
+
+describe("POST /reactions — only the operator's enabled kinds", () => {
+	it("400s a known kind the operator turned off", async () => {
+		const { app, env } = mkApp("approved", { comment_reaction_kinds: "fire,love" });
+		const res = await post(app, env, { comment_id: COMMENT_ID, kind: "cry" });
+		expect(res.status).toBe(400);
+		expect(((await res.json()) as { error: string }).error).toBe("invalid_kind");
+	});
+
+	it("400s an opt-in kind while the list is at its default", async () => {
+		const { app, env } = mkApp();
+		const res = await post(app, env, { comment_id: COMMENT_ID, kind: "rocket" });
+		expect(res.status).toBe(400);
+	});
+
+	it("accepts an opt-in kind once enabled", async () => {
+		installMockCaches();
+		const { app, env } = mkApp("approved", { comment_reaction_kinds: "rocket" });
+		const res = await post(app, env, { comment_id: COMMENT_ID, kind: "rocket" });
+		expect(res.status).toBe(200);
+	});
+
+	// Deliberate: once a kind is off, its button is gone, so the same POST that
+	// would toggle an earlier reaction off is refused too. The row stays counted.
+	it("400s toggling off a kind the operator disabled after it was used", async () => {
+		installMockCaches();
+		const settings: Record<string, string> = { comment_reaction_kinds: "rocket" };
+		const { app, env } = mkApp("approved", settings);
+		const body = { comment_id: COMMENT_ID, kind: "rocket" };
+		expect((await post(app, env, body)).status).toBe(200);
+		settings.comment_reaction_kinds = "fire";
+		const res = await post(app, env, body);
+		expect(res.status).toBe(400);
+		expect(((await res.json()) as { error: string }).error).toBe("invalid_kind");
+	});
+
+	it("does not consult the page list", async () => {
+		const { app, env } = mkApp("approved", { page_reaction_kinds: "rocket" });
+		const res = await post(app, env, { comment_id: COMMENT_ID, kind: "rocket" });
+		expect(res.status).toBe(400);
 	});
 });

@@ -48,8 +48,9 @@ import { createTurnstileGate, type TurnstileGate } from "./turnstile-gate";
 import { makeS, type StringTable, type WidgetKey } from "./strings";
 import {
 	type ReactionCount,
-	REACTION_KINDS,
+	type ReactionKind,
 	mergeReactionTotals,
+	pickReactionKinds,
 } from "./reactions";
 // The node shape this file renders, plus the arithmetic that turns a POST echo
 // into one. Kept out of here so the depth/flatten/placement rules are reachable
@@ -58,6 +59,7 @@ import {
 	type PostedEcho,
 	type TreeAuthor,
 	type TreeNode,
+	prependAnchor,
 	readPostedEcho,
 	synthesizePosted,
 	topLevelPlacement,
@@ -119,6 +121,28 @@ let langHint = "";
 let maxBodyChars = 10_000;
 /** How close to the ceiling the counter appears. Silent above this. */
 const COUNT_WARN_AT = 500;
+
+/** Operator override for the staff badge (config `staff_badge_label`); null = locale string. */
+let staffLabel: string | null = null;
+
+const isStaff = (me: Me): boolean => me?.role === "mod" || me?.role === "admin";
+
+/** Unchecked by default: a mod's comment is a reader's comment unless they say otherwise. */
+const buildStaffToggle = (): HTMLLabelElement => {
+	const wrap = el("label", "gr-staff-toggle");
+	const cb = el("input");
+	cb.type = "checkbox";
+	cb.className = "gr-staff-cb";
+	cb.name = "as_staff";
+	wrap.append(cb, document.createTextNode(` ${s("w.post_as_staff")}`));
+	return wrap;
+};
+
+/** The POST fragment for the toggle inside `scope`; empty when absent or unchecked. */
+const asStaffField = (scope: ParentNode): { as_staff?: true } =>
+	(scope.querySelector(".gr-staff-cb") as HTMLInputElement | null)?.checked
+		? { as_staff: true }
+		: {};
 
 /** Counter backing `nextId` — one sequence for every generated element id. */
 let idCounter = 0;
@@ -193,6 +217,8 @@ type Me = {
 	email: string | null;
 	avatar_url: string | null;
 	is_admin: boolean;
+	/** From /auth/me (publicUser). Gates the post-as-staff box; the server re-checks. */
+	role?: "user" | "mod" | "admin";
 } | null;
 
 
@@ -696,6 +722,11 @@ type WidgetCtx = {
 	downvotesEnabled: boolean;
 	pageReactionsEnabled: boolean;
 	pageVotesEnabled: boolean;
+	// Enabled reaction kinds per surface, in the operator's order, resolved once
+	// from config. The page bar reads `pageReactionKinds` and nothing else, so
+	// every mount mode that renders the bar gets the same list.
+	reactionKinds: readonly ReactionKind[];
+	pageReactionKinds: readonly ReactionKind[];
 	// Whether this install can send mail at all (EMAIL_FROM + PUBLIC_BASE_URL,
 	// derived server-side). Gates both subscribe affordances — the bell and the
 	// composer's notify checkbox — because POST /api/v1/subscribe 503s without
@@ -1078,7 +1109,7 @@ const buildReactions = (n: TreeNode, ctx: WidgetCtx): HTMLElement => {
 	};
 
 	const map = reactionsByKind(n.reactions);
-	for (const { kind, emoji, labelKey } of REACTION_KINDS) {
+	for (const { kind, emoji, labelKey } of ctx.reactionKinds) {
 		// Hide zero-count kinds unless the viewer is signed in (so signed-in
 		// users can react with a kind nobody else has used yet). Anonymous
 		// readers see only used kinds.
@@ -1086,8 +1117,8 @@ const buildReactions = (n: TreeNode, ctx: WidgetCtx): HTMLElement => {
 		const btn = el("button", "gr-reaction");
 		btn.type = "button";
 		btn.dataset.kind = kind;
-		// The label is hidden text rather than visible text: six labelled cells per
-		// comment would be more chrome than the comment. Hidden *in the tree*
+		// The label is hidden text rather than visible text: a row of labelled cells
+		// per comment would be more chrome than the comment. Hidden *in the tree*
 		// though, never an aria-label — that would become the whole accessible
 		// name and drop the count child, so a screen reader announced "Funny, not
 		// pressed" and never the number the button exists to report. The emoji is
@@ -1168,7 +1199,7 @@ const buildPageEngagement = (ctx: WidgetCtx): HTMLElement => {
 			el("div", "gr-page-react-prompt", s("w.page.react_prompt")),
 		);
 		const reactWrap = el("div", "gr-page-reactions");
-		for (const { kind, emoji, labelKey } of REACTION_KINDS) {
+		for (const { kind, emoji, labelKey } of ctx.pageReactionKinds) {
 			const btn = el("button", "gr-reaction gr-reaction-labelled");
 			btn.type = "button";
 			btn.dataset.kind = kind;
@@ -2149,6 +2180,7 @@ const buildReplyForm = (parent: TreeNode, ctx: WidgetCtx): HTMLElement => {
 		nameInput.required = true;
 		wrap.appendChild(nameInput);
 	}
+	if (isStaff(ctx.me)) wrap.appendChild(buildStaffToggle());
 	wrap.appendChild(buildWritePreview(ta, ctx.apiBase, true));
 
 	// Honeypot: mirrors the top-level form's anti-spam input. Hidden offscreen
@@ -2323,6 +2355,7 @@ const buildReplyForm = (parent: TreeNode, ctx: WidgetCtx): HTMLElement => {
 					turnstile_token: turnstileToken,
 					website: honey.value,
 					form_ts: formTs,
+					...asStaffField(wrap),
 					...postMetaFromDataset(ctx.host.dataset),
 				}),
 			});
@@ -2407,6 +2440,9 @@ const buildComment = (n: TreeNode, ctx: WidgetCtx): HTMLElement => {
 	if (n.author.provider !== "anon") {
 		meta.appendChild(el("span", "gr-verified", s("w.verified")));
 	}
+	if (n.pinned) meta.appendChild(el("span", "gr-pinned", s("w.pinned")));
+	// textContent via el(): the label is operator text and never parsed as HTML.
+	if (n.staff) meta.appendChild(el("span", "gr-staff", staffLabel ?? s("w.staff")));
 	// The timestamp is the permalink, the way Reddit/HN/Disqus do it — a plain
 	// anchor, so right-click-copy, middle-click and Cmd-click all work natively
 	// and we spend no bytes on a clipboard shim. Clicking it is handled by the
@@ -2642,6 +2678,8 @@ const buildThread = (n: TreeNode, ctx: WidgetCtx): HTMLElement => {
 	wrap.dataset.id = n.id;
 	// Anchor id for the /c/:id permalink redirect to scroll into view.
 	wrap.id = commentAnchorId(n.id);
+	// Read by `prependAnchor`, so a freshly posted comment lands below the pin.
+	if (n.pinned) wrap.dataset.pinned = "1";
 	wrap.appendChild(buildComment(n, ctx));
 	if (n.replies.length > 0) {
 		renderReplyList(replyMountFor(wrap, n, ctx).container, n.replies, ctx);
@@ -2734,6 +2772,8 @@ const buildForm = (
 	// Operator opted into challenging signed-in commenters too, so the Turnstile
 	// slot is no longer implied by `!signedIn` alone.
 	turnstileAlways: boolean,
+	// Session role is mod/admin: offer the opt-in staff box. The server re-checks.
+	staffEligible: boolean,
 ): HTMLFormElement => {
 	const form = document.createElement("form");
 	form.className = "gr-form";
@@ -2830,6 +2870,8 @@ const buildForm = (
 		tsSlot.setAttribute("aria-label", s("w.ts.title"));
 		form.appendChild(tsSlot);
 	}
+
+	if (staffEligible) form.appendChild(buildStaffToggle());
 
 	const submit = el("button", undefined, s("w.post_comment"));
 	submit.type = "submit";
@@ -3009,7 +3051,8 @@ const init = () => {
 	const root = host.attachShadow({ mode: "open" });
 	const style = el("style");
 	style.textContent = STYLE_CSS;
-	root.append(style, buildSkeleton());
+	root.append(style);
+	if (host.dataset.mode !== "reactions") root.append(buildSkeleton());
 
 	// Hand the height back as soon as there is real content to measure. Holding
 	// the reservation would leave a short thread — "be the first to comment"
@@ -3055,6 +3098,9 @@ const reserveSpace = () => {
 	// yet, and init() will find it on DOMContentLoaded either way.
 	const host = document.getElementById("garrul");
 	if (!host) return;
+	// A lone reactions bar is one row, not three skeleton comments; reserving
+	// 220px would shift the page the other way when it lands.
+	if (host.dataset.mode === "reactions") return;
 	const existing = getComputedStyle(host).minHeight;
 	if (existing && existing !== "0px" && existing !== "auto") return;
 	// Three skeleton rows and their gaps. Deliberately not the loaded widget's
@@ -3455,7 +3501,7 @@ const insertPostedNode = (
 		// thread, so it is already on screen wherever it belongs.
 		list.querySelector(".gr-empty")?.remove();
 		if (topLevelPlacement(activeSortFor(ctx.root)) === "prepend") {
-			before = list.firstChild;
+			before = prependAnchor(list);
 		}
 	} else if (!parent) {
 		return false;
@@ -3528,6 +3574,9 @@ const loadOnce = async (
 	host: HTMLElement,
 	sort: SortKey | null,
 ) => {
+	// data-mode="reactions": the page engagement bar alone. Anything else is the
+	// full thread, so a typo degrades to the default widget rather than to nothing.
+	const reactionsOnly = host.dataset.mode === "reactions";
 	// The instance's identity for draft keys — see WidgetCtx.apiOrigin.
 	const apiOrigin = new URL(apiBase).origin;
 	let siteKey: string | null = null;
@@ -3543,6 +3592,12 @@ const loadOnce = async (
 	let downvotesEnabled = true;
 	let pageReactionsEnabled = false;
 	let pageVotesEnabled = false;
+	// Distinguishes "config loaded and both flags are off" from "config never
+	// loaded" — the two default to the same false/false pair below, but only
+	// the first one is a real "nothing to render" claim.
+	let configLoaded = false;
+	let reactionKinds = pickReactionKinds(undefined);
+	let pageReactionKinds = reactionKinds;
 	// True by default, and read below as `!== false`, so a server older than this
 	// bundle — which sends no such field — keeps offering the notify checkbox it
 	// has always offered. Only an explicit `false` hides the subscribe UI.
@@ -3560,7 +3615,14 @@ const loadOnce = async (
 	// error here, exactly as the legacy tree fetch does further down.
 	let boot: BootstrapResponse | null;
 	try {
-		boot = await fetchBootstrap(apiBase, slug, sort, langExplicit, langHint);
+		boot = await fetchBootstrap(
+			apiBase,
+			slug,
+			reactionsOnly ? null : sort,
+			langExplicit,
+			langHint,
+			reactionsOnly ? "engagement" : null,
+		);
 	} catch (err) {
 		// renderError replaces the shadow tree, so the composer this handle
 		// belongs to is about to vanish.
@@ -3578,6 +3640,7 @@ const loadOnce = async (
 			: await fetchConfig(apiBase, langExplicit, langHint);
 		setFormTokenEnabled(formTokenWanted(cfg));
 		if (cfg) {
+			configLoaded = true;
 			// Install the locale before anything renders below. The table is the
 			// locale's own overrides, not a merged copy — makeS falls back to the
 			// bundled English per key, so a partial translation renders English
@@ -3603,6 +3666,10 @@ const loadOnce = async (
 			// the over-limit state.
 			if (typeof cfg.max_body_chars === "number" && cfg.max_body_chars > 0)
 				maxBodyChars = cfg.max_body_chars;
+			staffLabel =
+				typeof cfg.staff_badge_label === "string" && cfg.staff_badge_label
+					? cfg.staff_badge_label
+					: null;
 			providers = (cfg.providers ?? []).filter((p): p is OAuthProvider =>
 				// biome-ignore lint/suspicious/noPrototypeBuiltins: the rule wants Object.hasOwn (ES2022); the widget builds for es2020 and esbuild will not polyfill it. This is already the safe `.call` form.
 				Object.prototype.hasOwnProperty.call(PROVIDER_LABELS, p),
@@ -3614,6 +3681,8 @@ const loadOnce = async (
 			downvotesEnabled = cfg.downvotes_enabled !== false;
 			pageReactionsEnabled = cfg.page_reactions_enabled === true;
 			pageVotesEnabled = cfg.page_votes_enabled === true;
+			reactionKinds = pickReactionKinds(cfg.reaction_kinds);
+			pageReactionKinds = pickReactionKinds(cfg.page_reaction_kinds);
 			subscriptionsEnabled = cfg.subscriptions_enabled !== false;
 			if (typeof cfg.replies_per_thread === "number")
 				repliesPerThread = cfg.replies_per_thread;
@@ -3640,6 +3709,83 @@ const loadOnce = async (
 		// the legacy request. Set it here too, because the throw skipped the
 		// assignment above and a previous mount on this page may have disabled it.
 		setFormTokenEnabled(true);
+	}
+
+	const reload = () => {
+		void load(root, slug, apiBase, host);
+	};
+	const permalinkFor = (id: string): string =>
+		commentHref(id, {
+			dataUrl: host.dataset.url,
+			locationHref: window.location.href,
+			apiBase,
+		});
+	const makeCtx = (
+		me: Me,
+		acceptingComments: boolean,
+		closedReason: WidgetCtx["closedReason"],
+	): WidgetCtx => ({
+		apiBase,
+		apiOrigin,
+		slug,
+		host,
+		root,
+		me,
+		editWindowMs: editWindowMinutes * 60_000,
+		turnstileSiteKey: siteKey,
+		turnstileAlways,
+		commentsEnabled,
+		acceptingComments,
+		closedReason,
+		reactionsEnabled,
+		votingEnabled,
+		downvotesEnabled,
+		pageReactionsEnabled,
+		pageVotesEnabled,
+		reactionKinds,
+		pageReactionKinds,
+		subscriptionsEnabled,
+		repliesPerThread,
+		autoCollapseDepth,
+		communityMinVotes,
+		communityCollapseRatio,
+		seed: {
+			bootstrapped: boot != null,
+			engagement: boot?.engagement,
+			subscription: boot?.subscription,
+		},
+		reload,
+		revealAfterReload: (id: string | null, announce?: string) =>
+			revealAfterReload(root, id, announce),
+		permalinkFor,
+	});
+
+	if (reactionsOnly) {
+		root.replaceChildren();
+		if (!pageReactionsEnabled && !pageVotesEnabled) {
+			// Nothing to show and nothing to fetch. One line for the operator
+			// wondering why the embed is empty; readers see nothing at all. Only
+			// blame the config when it actually loaded and said so — both flags
+			// also default to false when the config fetch itself failed, and
+			// that is a different problem than an operator's deliberate setting.
+			console.warn(
+				configLoaded
+					? '[garrul] data-mode="reactions": page reactions and page votes are both off (PAGE_REACTIONS_ENABLED / PAGE_VOTES_ENABLED) — nothing to render'
+					: '[garrul] data-mode="reactions": config failed to load — nothing to render',
+			);
+			return;
+		}
+		// The bar never reads ctx.me (its `mine` state comes from
+		// /page-engagement), so the legacy path skips /auth/me. The bar applies
+		// the bootstrap seed, or GETs /page-engagement itself when
+		// seed.bootstrapped is false — never /comments, never form-token.
+		const me = boot ? ((boot.user ?? null) as Me) : null;
+		const style = el("style");
+		style.textContent = STYLE_CSS;
+		const wrap = el("div", "gr-root");
+		wrap.appendChild(buildPageEngagement(makeCtx(me, false, null)));
+		root.append(style, wrap);
+		return;
 	}
 
 	let me: Me;
@@ -3694,48 +3840,7 @@ const loadOnce = async (
 	style.textContent = STYLE_CSS;
 
 	const wrap = el("div", "gr-root");
-	const reload = () => {
-		void load(root, slug, apiBase, host);
-	};
-	const permalinkFor = (id: string): string =>
-		commentHref(id, {
-			dataUrl: host.dataset.url,
-			locationHref: window.location.href,
-			apiBase,
-		});
-	const ctx: WidgetCtx = {
-		apiBase,
-		apiOrigin,
-		slug,
-		host,
-		root,
-		me,
-		editWindowMs: editWindowMinutes * 60_000,
-		turnstileSiteKey: siteKey,
-		turnstileAlways,
-		commentsEnabled,
-		acceptingComments,
-		closedReason,
-		reactionsEnabled,
-		votingEnabled,
-		downvotesEnabled,
-		pageReactionsEnabled,
-		pageVotesEnabled,
-		subscriptionsEnabled,
-		repliesPerThread,
-		autoCollapseDepth,
-		communityMinVotes,
-		communityCollapseRatio,
-		seed: {
-			bootstrapped: boot != null,
-			engagement: boot?.engagement,
-			subscription: boot?.subscription,
-		},
-		reload,
-		revealAfterReload: (id: string | null, announce?: string) =>
-			revealAfterReload(root, id, announce),
-		permalinkFor,
-	};
+	const ctx = makeCtx(me, acceptingComments, closedReason);
 	// Publish it for `submit()`, which is wired to a composer built before this
 	// context existed. See `mountCtx`.
 	mountCtx.set(root, ctx);
@@ -3754,6 +3859,7 @@ const loadOnce = async (
 		subscriptionsEnabled,
 		me?.email ?? null,
 		turnstileAlways,
+		isStaff(me),
 	);
 	// Restore/persist the top-level composer draft (cleared on successful post
 	// in submit()). Reply-form drafts are wired separately in buildReplyForm.
@@ -4146,6 +4252,7 @@ const submit = async (
 				turnstile_token: turnstileToken,
 				website: honeypot,
 				form_ts: formTs,
+				...asStaffField(form),
 				...postMetaFromDataset(host.dataset),
 			}),
 		});

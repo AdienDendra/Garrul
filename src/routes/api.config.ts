@@ -19,6 +19,10 @@
  *     surfaces the widget should render. Resolved with DB-override > env >
  *     default precedence (see src/lib/settings.ts); operators toggle them at
  *     runtime from the admin Settings page.
+ *   - reaction_kinds / page_reaction_kinds: enabled reaction kinds per
+ *     surface, operator-ordered (src/lib/settings.ts reactionKinds). The widget
+ *     renders only these; stored counts of other kinds still arrive in the tree
+ *     and are ignored.
  *   - subscriptions_enabled: whether this install can send mail, derived from
  *     EMAIL_FROM + PUBLIC_BASE_URL. Not an operator toggle — it tells the widget
  *     whether to offer the subscribe affordances at all, since `POST
@@ -51,7 +55,11 @@ import { Hono } from "hono";
 import type { Bindings } from "../index";
 import { PROVIDERS, type ProviderId } from "../lib/oauth";
 import { MAX_BODY_CHARS } from "../lib/markdown";
-import { loadSettings, type ResolvedSettings } from "../lib/settings";
+import {
+	loadSettings,
+	reactionKinds,
+	type ResolvedSettings,
+} from "../lib/settings";
 import { turnstileAlwaysOn } from "../lib/turnstile";
 import { FALLBACK_LOCALE, LOCALES } from "../i18n";
 import { resolveLocale } from "../i18n/negotiate";
@@ -100,7 +108,7 @@ export const buildConfigPayload = (
 	resolved: ResolvedSettings,
 	locale: string,
 ): Record<string, unknown> => {
-	const { flags, numbers } = resolved;
+	const { flags, numbers, texts } = resolved;
 	// Provider client-id/secret env-var names are typed as plain strings on
 	// ProviderConfig, so index the bindings through a string-keyed view.
 	const envRecord = env as unknown as Record<string, string | undefined>;
@@ -148,6 +156,10 @@ export const buildConfigPayload = (
 		downvotes_enabled: flags.downvotes_enabled,
 		page_reactions_enabled: flags.page_reactions_enabled,
 		page_votes_enabled: flags.page_votes_enabled,
+		// Enabled kinds per surface, in render order. Always sent, even with the
+		// surface off, so the shape doesn't vary with a flag.
+		reaction_kinds: reactionKinds(texts, "comment_reaction_kinds"),
+		page_reaction_kinds: reactionKinds(texts, "page_reaction_kinds"),
 		// Derived, not an operator setting: "can this install send mail at all".
 		// Both are required for a double-opt-in — without EMAIL_FROM there is
 		// nothing to send from, and without PUBLIC_BASE_URL the confirmation link
@@ -166,6 +178,10 @@ export const buildConfigPayload = (
 		// tunable — it is a constant in lib/markdown.ts, shipped here only so the
 		// composer and the validator can never disagree about it.
 		max_body_chars: MAX_BODY_CHARS,
+		// Operator's badge wording, already trimmed and capped by the resolver.
+		// null (not "") when unset, same as turnstile_site_key: the widget then
+		// uses its own locale string.
+		staff_badge_label: texts.staff_badge_label || null,
 		comments_per_page: numbers.comments_per_page,
 		replies_per_thread: numbers.replies_per_thread,
 		auto_collapse_depth: numbers.auto_collapse_depth,

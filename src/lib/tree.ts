@@ -27,6 +27,10 @@ import type { Comment, TreeComment } from "../db/queries";
  * and a per-author privilege flag in it lets anyone enumerate which accounts
  * are worth attacking. `role` was already withheld; `is_admin` was the same
  * fact under an older name. Nothing in the widget rendered a badge from it.
+ *
+ * The one role signal the tree does carry is per *comment*: `staff: true` on a
+ * TreeNode whose author chose to post it as staff (migration 0026). An
+ * unmarked comment by an admin looks exactly like anyone else's.
  */
 export type TreeAuthor = {
 	id: string;
@@ -75,6 +79,11 @@ export type TreeNode = {
 	/** -1 / 0 / 1; only meaningful for the requesting viewer. Anonymous
 	 *  viewers always see 0 (and their list response is KV-cached). */
 	my_vote: -1 | 0 | 1;
+	/** Present (always `true`) only on the post's pinned thread. Omitted rather
+	 *  than `false` so an unpinned tree serializes exactly as before. */
+	pinned?: true;
+	/** Present (true) only when the author posted this as staff. */
+	staff?: true;
 	replies: TreeNode[];
 };
 
@@ -224,6 +233,14 @@ const toNode = (
 	score_up: row.score_up ?? 0,
 	score_down: row.score_down ?? 0,
 	my_vote: myVotes.get(row.id) ?? 0,
+	// A dormant pin (the row left `approved`) pages normally and is not flagged,
+	// matching getPinnedThreadRef.
+	...(row.pinned_at != null && row.status === "approved"
+		? { pinned: true as const }
+		: {}),
+	// A tombstone keeps no badge: the author and body are gone, so a staff
+	// mark would be a role claim about nothing.
+	...(row.as_staff === 1 && row.status !== "deleted" ? { staff: true as const } : {}),
 	replies: [],
 });
 

@@ -32,6 +32,11 @@
  *     subscription: { subscribed, pending, id }             // signed-in + mail only
  *   }
  *
+ * `?view=engagement` (the standalone reactions bar, `data-mode="reactions"`)
+ * answers only `config`, `user` and `engagement` — no tree, no tree-cache
+ * traffic, no subscription lookup. Any other `view` is a 400: silently
+ * serving the full envelope to a typo would hide a widget/Worker mismatch.
+ *
  * **Every section is byte-identical to what its standalone endpoint returns**,
  * and `tests/bootstrap.test.ts` pins that by diffing the two. That invariant is
  * what lets the widget reuse one set of parsing code for both boot paths, and
@@ -64,7 +69,7 @@ import {
 } from "../db/queries";
 import { isActiveUser } from "../lib/active-user";
 import { readSession } from "../lib/session";
-import { loadSettings } from "../lib/settings";
+import { loadSettings, type ResolvedFlags } from "../lib/settings";
 import { putCache, tryWaitUntil } from "../lib/response-cache";
 import { TREE_CACHE_TTL } from "../lib/tree-cache";
 import {
@@ -92,6 +97,31 @@ const bootstrap = new Hono<{
 	Variables: SessionVars & LocaleVars;
 }>();
 
+/**
+ * Page-level reactions/votes, byte-identical to GET /page-engagement. Absent
+ * (undefined) when neither surface is on, so the common install pays nothing.
+ * Anonymous viewers get totals only — no ghost is minted on a GET.
+ */
+const engagementSection = async (
+	db: D1Database,
+	flags: ResolvedFlags,
+	slug: string,
+	userId: string | null,
+): Promise<Record<string, unknown> | undefined> => {
+	if (!flags.page_reactions_enabled && !flags.page_votes_enabled) return undefined;
+	const engagement: Record<string, unknown> = {};
+	if (flags.page_reactions_enabled) {
+		engagement.reactions = reactionTotals(await listPageReactions(db, slug));
+		engagement.my_reactions = userId
+			? [...(await listUserPageReactions(db, slug, userId))]
+			: [];
+	}
+	if (flags.page_votes_enabled) {
+		engagement.votes = await getPageVote(db, slug, userId);
+	}
+	return engagement;
+};
+
 bootstrap.get("/", async (c) => {
 	// Shadows the module-level English `t` for the whole handler, so an error
 	// body matches the language the rest of the widget is in.
@@ -99,6 +129,10 @@ bootstrap.get("/", async (c) => {
 	const slug = (c.req.query("slug") ?? "").trim();
 	if (!slug) return c.json({ error: t("err.post.required") }, 400);
 	if (!SLUG_RE.test(slug)) return c.json({ error: t("err.post.invalid") }, 400);
+
+	const view = c.req.query("view");
+	if (view !== undefined && view !== "engagement")
+		return c.json({ error: "invalid_view" }, 400);
 
 	// One settings read and one session read for what used to be three and four.
 	// `readSession` costs two KV reads and, once a session ages past its refresh
@@ -143,6 +177,21 @@ bootstrap.get("/", async (c) => {
 	// One row serving both the `user` section and the subscription gate below;
 	// `/auth/me` and `/subscribe/mine` each read it separately today.
 	const user = session ? await getUser(c.env.DB, session.user_id) : null;
+
+	if (view === "engagement") {
+		const out: Record<string, unknown> = {
+			config: buildConfigPayload(c.env, resolved, locale),
+			user: user ? publicUser(user) : null,
+		};
+		const engagement = await engagementSection(
+			c.env.DB,
+			flags,
+			slug,
+			session?.user_id ?? null,
+		);
+		if (engagement) out.engagement = engagement;
+		return c.json(out);
+	}
 
 	const treeOpts = {
 		slug,
@@ -198,25 +247,13 @@ bootstrap.get("/", async (c) => {
 
 	// Page-level reactions/votes, both default OFF. Omitted entirely when
 	// neither surface is on, so the common install pays no bytes for them.
-	if (flags.page_reactions_enabled || flags.page_votes_enabled) {
-		const engagement: Record<string, unknown> = {};
-		// Anonymous viewers get totals only; we deliberately do not mint a ghost
-		// user on a GET just to look up "my" state (their own state appears after
-		// they first interact).
-		const userId = session?.user_id ?? null;
-		if (flags.page_reactions_enabled) {
-			engagement.reactions = reactionTotals(
-				await listPageReactions(c.env.DB, slug),
-			);
-			engagement.my_reactions = userId
-				? [...(await listUserPageReactions(c.env.DB, slug, userId))]
-				: [];
-		}
-		if (flags.page_votes_enabled) {
-			engagement.votes = await getPageVote(c.env.DB, slug, userId);
-		}
-		payload.engagement = engagement;
-	}
+	const engagement = await engagementSection(
+		c.env.DB,
+		flags,
+		slug,
+		session?.user_id ?? null,
+	);
+	if (engagement) payload.engagement = engagement;
 
 	// Bell state for this thread. Requires a session that may act (a banned or
 	// erased identity gets the section omitted, which is how `/subscribe/mine`'s

@@ -28,6 +28,7 @@ import type { RetentionStats } from "../src/db/ip-retention";
 import type { AuditRetentionStats } from "../src/db/audit-retention";
 import { renderSettings } from "../src/admin-ui/pages/settings";
 import { MAX_IMPORT_BYTES } from "../src/lib/import/core";
+import { REACTION_KINDS } from "../src/widget/reactions";
 import { renderDashboard } from "../src/admin-ui/pages/dashboard";
 import { layout, renderUpdateBanner } from "../src/admin-ui/layout";
 import {
@@ -38,6 +39,7 @@ import {
 	type ResolvedStrings,
 	STRING_KEYS,
 	type ResolvedTexts,
+	isReactionKindsKey,
 	TEXT_KEYS,
 	stringDefault,
 	stringOptions,
@@ -70,6 +72,8 @@ const makeComment = (over: Partial<AdminComment> = {}): AdminComment => ({
 	depth: 1,
 	score_up: 0,
 	score_down: 0,
+	pinned_at: null,
+	as_staff: 0,
 	author_name: "Alice",
 	author_email: null,
 	author_avatar_url: null,
@@ -542,6 +546,19 @@ describe("renderOperator", () => {
 		expect(html).toContain(`Max upload: ${mb} MB`);
 		expect(html).toContain(`file too large (max ${mb} MB)`);
 	});
+
+	it("offers the site export as plain links with the read-quota warning", () => {
+		const html = renderOperator({
+			rerender: { current_version: 1, up_to_date: 0, stale: 0, oldest_version: null },
+			retention: retentionOff,
+			audit_retention: auditRetentionOff,
+			seed_demo_allowed: false,
+		});
+		expect(html).toContain("Export site data");
+		expect(html).toContain(`<a href="/admin/api/export?format=json">Download JSON</a>`);
+		expect(html).toContain(`<a href="/admin/api/export?format=csv">Download CSV</a>`);
+		expect(html).toContain("daily read quota");
+	});
 });
 
 describe("renderUpdateBanner", () => {
@@ -763,6 +780,9 @@ describe("renderSettings field-name contract", () => {
 	});
 
 	it("seeds every text key into Alpine state so save() round-trips it", () => {
+		// Reaction lists seed through the lenient read, so they need a real kind.
+		const seedFor = (k: string) =>
+			isReactionKindsKey(k) ? "rocket" : "seeded-value";
 		// A textarea whose key is missing from the seed binds to undefined, and
 		// save() then posts `undefined` — the handler skips it, so the operator's
 		// edit vanishes with a "Settings saved" toast.
@@ -771,12 +791,10 @@ describe("renderSettings field-name contract", () => {
 			flags,
 			numbers,
 			strings,
-			Object.fromEntries(
-				TEXT_KEYS.map((k) => [k, "seeded-value"]),
-			) as ResolvedTexts,
+			Object.fromEntries(TEXT_KEYS.map((k) => [k, seedFor(k)])) as ResolvedTexts,
 		);
 		for (const key of TEXT_KEYS) {
-			expect(seeded).toContain(`&quot;${key}&quot;:&quot;seeded-value&quot;`);
+			expect(seeded).toContain(`&quot;${key}&quot;:&quot;${seedFor(key)}&quot;`);
 		}
 		expect(seeded).toContain("texts: this.texts");
 	});
@@ -846,9 +864,9 @@ describe("renderSettings field-name contract", () => {
 
 	it("does not emit a settings input bound to an unknown key", () => {
 		// Catches a stray control whose name isn't in the whitelist (would be
-		// silently dropped by the handler). Every checkbox/number input name
-		// must be a known flag or number key.
-		const known = new Set<string>([...FLAG_KEYS, ...NUMBER_KEYS]);
+		// silently dropped by the handler). Every checkbox/number/hidden input
+		// name must be a known flag, number or text key.
+		const known = new Set<string>([...FLAG_KEYS, ...NUMBER_KEYS, ...TEXT_KEYS]);
 		const inputNames = [
 			...html.matchAll(/<input\b[^>]*\bname="([^"]+)"/g),
 		].map((m) => m[1]!);
@@ -886,6 +904,25 @@ describe("renderSettings field-name contract", () => {
 			texts,
 		);
 		expect(withSecret).toContain("hasFormTsSecret: true");
+	});
+
+	it("renders a reaction-kind chip list per surface", () => {
+		for (const key of ["comment_reaction_kinds", "page_reaction_kinds"]) {
+			expect(html).toContain(`chipOrder('${key}')`);
+			expect(html).toContain(`toggleKind('${key}', kind)`);
+			expect(html).toContain(`moveKind('${key}', kind, -1)`);
+		}
+	});
+
+	it("seeds every vocabulary kind with its glyph and English label", () => {
+		for (const r of REACTION_KINDS) {
+			expect(html).toContain(`&quot;${r.kind}&quot;:{&quot;emoji&quot;:&quot;${r.emoji}&quot;`);
+		}
+		expect(html).toContain("&quot;label&quot;:&quot;Agree&quot;");
+	});
+
+	it("warns that a long comment list gets crowded", () => {
+		expect(html).toContain("more than about six");
 	});
 });
 

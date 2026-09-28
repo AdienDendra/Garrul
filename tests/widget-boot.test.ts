@@ -317,6 +317,81 @@ describe("fetchConfig — the legacy path's first call", () => {
 	});
 });
 
+describe("fetchBootstrap — view=engagement (the standalone reactions bar)", () => {
+	const ENGAGE = { config: { locale: "en" }, user: null };
+
+	it("sends view=engagement", async () => {
+		const calls = stubFetch(() => jsonRes(ENGAGE));
+		await fetchBootstrap(API, SLUG, null, "", "", "engagement");
+		const url = new URL(calls[0]?.url ?? "");
+		expect([...url.searchParams]).toEqual([
+			["slug", SLUG],
+			["view", "engagement"],
+		]);
+	});
+
+	it("accepts a body with no comment tree — this view has none", async () => {
+		stubFetch(() => jsonRes(ENGAGE));
+		expect(await fetchBootstrap(API, SLUG, null, "", "", "engagement")).toEqual(ENGAGE);
+	});
+
+	it("accepts the full envelope from a Worker that predates ?view=", async () => {
+		const full = { ...ENGAGE, ...MOUNTABLE };
+		stubFetch(() => jsonRes(full));
+		expect(await fetchBootstrap(API, SLUG, null, "", "", "engagement")).toEqual(full);
+	});
+
+	// config is the one section this view always emits; without it the body is
+	// not an answer, so the legacy /config call is the better guess.
+	const unusable: [string, unknown][] = [
+		["an error envelope", { error: "post_required" }],
+		["a bare JSON null", null],
+		["a null config", { config: null, user: null }],
+		["a string config", { config: "x" }],
+		["an array config", { config: [] }],
+	];
+	for (const [label, body] of unusable) {
+		it(`falls back on ${label}`, async () => {
+			stubFetch(() => jsonRes(body));
+			expect(await fetchBootstrap(API, SLUG, null, "", "", "engagement")).toBeNull();
+		});
+	}
+
+	it("falls back on 404 and remembers it", async () => {
+		const calls = stubFetch(() => jsonRes({ error: "not found" }, 404));
+		expect(await fetchBootstrap(API, SLUG, null, "", "", "engagement")).toBeNull();
+		expect(await fetchBootstrap(API, SLUG, null, "", "", "engagement")).toBeNull();
+		expect(calls).toHaveLength(1);
+	});
+
+	it("falls back on a network failure", async () => {
+		stubFetch(() => {
+			throw new TypeError("Failed to fetch");
+		});
+		expect(await fetchBootstrap(API, SLUG, null, "", "", "engagement")).toBeNull();
+	});
+
+	it("falls back on a non-JSON body — a proxy or captive portal answering 200", async () => {
+		stubFetch(
+			() =>
+				new Response("<html>not json</html>", {
+					status: 200,
+					headers: { "content-type": "text/html" },
+				}),
+		);
+		expect(await fetchBootstrap(API, SLUG, null, "", "", "engagement")).toBeNull();
+	});
+
+	for (const status of [429, 500, 503]) {
+		it(`throws on ${status} rather than spending the legacy calls`, async () => {
+			stubFetch(() => jsonRes({ error: "nope" }, status));
+			await expect(
+				fetchBootstrap(API, SLUG, null, "", "", "engagement"),
+			).rejects.toThrow(`HTTP ${status}`);
+		});
+	}
+});
+
 // --- against the real Worker -------------------------------------------------
 
 const MIGRATIONS_DIR = join(__dirname, "../src/db/migrations");
@@ -486,6 +561,16 @@ describe("fetchBootstrap — against the real handler", () => {
 		routeToWorker();
 		const boot = await fetchBootstrap("http://localhost", SLUG, "new", "de", "");
 		expect(boot?.config?.locale).toBe("de");
+	});
+
+	it("serves the engagement view the widget accepts, with no tree", async () => {
+		env.PAGE_REACTIONS_ENABLED = "true";
+		routeToWorker(SID);
+		const boot = await fetchBootstrap("http://localhost", SLUG, null, "", "", "engagement");
+		expect(boot?.config?.locale).toBe("en");
+		expect(boot).not.toHaveProperty("comments");
+		expect(boot?.engagement?.reactions).toEqual({});
+		expect((boot?.user as { id?: string } | null)?.id).toBe(USER);
 	});
 
 	it("surfaces the Worker rejecting the slug rather than falling back", async () => {

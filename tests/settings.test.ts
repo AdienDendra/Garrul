@@ -20,19 +20,25 @@ import {
 	loadNumbers,
 	loadSettings,
 	loadStrings,
+	loadTexts,
+	canonicalReactionKinds,
+	reactionKinds,
 	bustSettingsCache,
 	parseIntSetting,
 	parseStringSetting,
 	FLAG_KEYS,
 	NUMBER_KEYS,
 	STRING_KEYS,
+	STAFF_BADGE_LABEL_MAX,
 	numberBounds,
 	stringOptions,
 	type FlagKey,
 	type NumberKey,
+	type ResolvedTexts,
 } from "../src/lib/settings";
 import { reactions } from "../src/routes/api.reactions";
 import { comments } from "../src/routes/api.comments";
+import { buildConfigPayload, config } from "../src/routes/api.config";
 import type { Bindings } from "../src/index";
 
 // In-memory KV double for TREE_CACHE. Tracks delete calls so a test can prove
@@ -859,5 +865,106 @@ describe("loadStrings", () => {
 		await bustSettingsCache(env);
 		await loadStrings(env);
 		expect(db.reads()).toBe(2);
+	});
+});
+
+describe("staff_badge_label", () => {
+	it("defaults to empty and emits null in the config payload", async () => {
+		const { env } = mkEnv();
+		expect((await loadTexts(env)).staff_badge_label).toBe("");
+		const cfg = buildConfigPayload(env, await loadSettings(mkEnv().env), "en");
+		expect(cfg.staff_badge_label).toBeNull();
+	});
+
+	it("emits the trimmed operator label", async () => {
+		const { env } = mkEnv({ staff_badge_label: "  Team  " });
+		const cfg = buildConfigPayload(env, await loadSettings(env), "en");
+		expect(cfg.staff_badge_label).toBe("Team");
+	});
+
+	it("truncates an over-long stored value to its own cap, not the global one", async () => {
+		const { env } = mkEnv({ staff_badge_label: "x".repeat(STAFF_BADGE_LABEL_MAX + 10) });
+		expect((await loadTexts(env)).staff_badge_label).toHaveLength(STAFF_BADGE_LABEL_MAX);
+	});
+});
+
+const SIX = ["fire", "love", "wow", "laugh", "hmm", "cry"];
+
+describe("reaction kind lists — resolution", () => {
+	it("default to the six pre-upgrade kinds, in their old order", async () => {
+		const { env } = mkEnv();
+		const { texts } = await loadSettings(env);
+		expect(reactionKinds(texts, "comment_reaction_kinds")).toEqual(SIX);
+		expect(reactionKinds(texts, "page_reaction_kinds")).toEqual(SIX);
+	});
+
+	it("resolves a stored list in its stored order, per surface", async () => {
+		const { env } = mkEnv({ comment_reaction_kinds: "rocket,fire" });
+		const { texts } = await loadSettings(env);
+		expect(reactionKinds(texts, "comment_reaction_kinds")).toEqual(["rocket", "fire"]);
+		expect(reactionKinds(texts, "page_reaction_kinds")).toEqual(SIX);
+	});
+
+	it("drops unknown kinds and repeats on read", async () => {
+		const { env } = mkEnv({ page_reaction_kinds: " fire, like ,fire,eyes" });
+		const { texts } = await loadSettings(env);
+		expect(reactionKinds(texts, "page_reaction_kinds")).toEqual(["fire", "eyes"]);
+	});
+
+	it("falls back to the default when nothing valid is left", async () => {
+		for (const raw of ["", "bogus", ",,"]) {
+			const { env } = mkEnv({ comment_reaction_kinds: raw });
+			const { texts } = await loadSettings(env);
+			expect(reactionKinds(texts, "comment_reaction_kinds")).toEqual(SIX);
+		}
+	});
+
+	// A settings:resolved blob cached by the previous release has no such key.
+	// It lives up to an hour after deploy; it must read as "default", not crash.
+	it("reads a pre-upgrade cached blob as the default", () => {
+		expect(reactionKinds({} as ResolvedTexts, "comment_reaction_kinds")).toEqual(SIX);
+	});
+
+	it("has no env fallback — only a DB row changes it", async () => {
+		const { env } = mkEnv({}, { COMMENT_REACTION_KINDS: "rocket" });
+		const { texts } = await loadSettings(env);
+		expect(reactionKinds(texts, "comment_reaction_kinds")).toEqual(SIX);
+	});
+});
+
+describe("canonicalReactionKinds — the save-path check", () => {
+	it("trims and folds repeats, keeping first-seen order", () => {
+		expect(canonicalReactionKinds(" rocket, fire ,rocket")).toBe("rocket,fire");
+	});
+	it("accepts all twelve", () => {
+		const all = "fire,love,wow,laugh,hmm,cry,thumbsup,party,eyes,thanks,rocket,hundred";
+		expect(canonicalReactionKinds(all)).toBe(all);
+	});
+	it("rejects an unknown kind, the retired `like`, and an empty list", () => {
+		expect(canonicalReactionKinds("fire,shrug")).toBeNull();
+		expect(canonicalReactionKinds("like")).toBeNull();
+		expect(canonicalReactionKinds("")).toBeNull();
+		expect(canonicalReactionKinds("fire,,love")).toBeNull();
+	});
+});
+
+describe("GET /api/v1/config — reaction kinds", () => {
+	const app = new Hono<{ Bindings: Bindings }>().route("/", config);
+
+	it("serves the default lists on a fresh install", async () => {
+		const { env } = mkEnv();
+		const body = (await (await app.request("/", {}, env)).json()) as Record<string, unknown>;
+		expect(body.reaction_kinds).toEqual(SIX);
+		expect(body.page_reaction_kinds).toEqual(SIX);
+	});
+
+	it("serves each surface's configured list", async () => {
+		const { env } = mkEnv({
+			comment_reaction_kinds: "thumbsup,party",
+			page_reaction_kinds: "hundred",
+		});
+		const body = (await (await app.request("/", {}, env)).json()) as Record<string, unknown>;
+		expect(body.reaction_kinds).toEqual(["thumbsup", "party"]);
+		expect(body.page_reaction_kinds).toEqual(["hundred"]);
 	});
 });

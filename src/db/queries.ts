@@ -105,6 +105,12 @@ export type Comment = {
 	depth: number;
 	score_up: number;
 	score_down: number;
+	/** Epoch ms this top-level comment was pinned; NULL when not pinned. At
+	 *  most one per post (migration 0025's partial UNIQUE index). */
+	pinned_at: number | null;
+	/** 1 when the author posted this comment as staff (migration 0026). Set
+	 *  only on insert, role-gated; cleared by setUserRole on demotion. */
+	as_staff: number;
 };
 
 /**
@@ -120,7 +126,7 @@ export type TreeComment = Omit<Comment, "body_md" | "ip_hash" | "user_agent">;
 /** Column list backing `TreeComment`. Keep the two in sync. */
 const TREE_COLUMNS = `id, post_slug, parent_id, user_id, body_html,
 	        renderer_version, status, edited_at, deleted_at, deleted_by,
-	        created_at, depth, score_up, score_down`;
+	        created_at, depth, score_up, score_down, pinned_at, as_staff`;
 
 // Every users SELECT that feeds `toUser` goes through this list. It used to be
 // spelled out at six call sites, which meant a new column silently arrived as
@@ -495,6 +501,7 @@ type InsertCommentInput = {
 	 *  validate it, and a silent default would let an unbounded reply chain
 	 *  through the MAX_REPLY_DEPTH check that reads this column. */
 	depth: number;
+	as_staff?: boolean;
 };
 
 export const insertComment = async (
@@ -509,8 +516,8 @@ export const insertComment = async (
 			`INSERT INTO comments (
 			   id, post_slug, parent_id, user_id, body_md, body_html,
 			   renderer_version, status, edited_at, deleted_at, deleted_by,
-			   ip_hash, user_agent, created_at, depth)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?)`,
+			   ip_hash, user_agent, created_at, depth, as_staff)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?)`,
 		)
 		.bind(
 			id,
@@ -525,6 +532,7 @@ export const insertComment = async (
 			input.user_agent,
 			now,
 			input.depth,
+			input.as_staff ? 1 : 0,
 		)
 		.run();
 	return {
@@ -545,6 +553,8 @@ export const insertComment = async (
 		depth: input.depth,
 		score_up: 0,
 		score_down: 0,
+		pinned_at: null,
+		as_staff: input.as_staff ? 1 : 0,
 	};
 };
 
@@ -556,7 +566,7 @@ export const getComment = async (
 		.prepare(
 			`SELECT id, post_slug, parent_id, user_id, body_md, body_html,
 			        renderer_version, status, edited_at, deleted_at, deleted_by,
-			        ip_hash, user_agent, created_at, depth, score_up, score_down
+			        ip_hash, user_agent, created_at, depth, score_up, score_down, pinned_at, as_staff
 			 FROM comments WHERE id = ?`,
 		)
 		.bind(id)
@@ -577,7 +587,7 @@ export const getCommentsByIds = async (
 		.prepare(
 			`SELECT id, post_slug, parent_id, user_id, body_md, body_html,
 			        renderer_version, status, edited_at, deleted_at, deleted_by,
-			        ip_hash, user_agent, created_at, depth, score_up, score_down
+			        ip_hash, user_agent, created_at, depth, score_up, score_down, pinned_at, as_staff
 			   FROM comments WHERE id IN (${placeholders})`,
 		)
 		.bind(...ids)
@@ -684,6 +694,10 @@ export type CommentSort = (typeof COMMENT_SORTS)[number];
  * Cursor semantics: return rows strictly after the cursor position in the
  * requested order. The caller passes `limit = pageSize + 1` to learn whether a
  * next page exists.
+ *
+ * The approved pinned thread is excluded in every sort and on every page (a
+ * dormant pin on a hidden row pages normally); the route prepends it to page
+ * one (getPinnedThreadRef), so it never repeats and never moves a cursor.
  */
 export const listThreadRefsForPost = async (
 	db: D1Database,
@@ -727,7 +741,9 @@ export const listThreadRefsForPost = async (
 		.prepare(
 			`SELECT id, (score_up - score_down) AS score, created_at
 			   FROM comments
-			  WHERE post_slug = ? AND parent_id IS NULL AND ${visible.sql} ${cursorSql}
+			  WHERE post_slug = ? AND parent_id IS NULL
+			    AND (pinned_at IS NULL OR status <> 'approved')
+			    AND ${visible.sql} ${cursorSql}
 			  ORDER BY ${order}
 			  LIMIT ?`,
 		)
@@ -757,6 +773,66 @@ export const getThreadCreatedAt = async (
 };
 
 /**
+ * The post's pinned top-level thread, as a ThreadRef, or null. At most one row
+ * can match (comments_pinned_idx). `status = 'approved'` is the only thing
+ * that retires a pin when the comment is hidden: no status writer clears
+ * pinned_at, so a spammed or deleted pin goes dormant here and pages normally
+ * in listThreadRefsForPost.
+ *
+ * `.first()`, not `.all()` plus LIMIT: one row by construction. The unary
+ * `+` on status keeps it out of index selection, so SQLite uses
+ * comments_pinned_idx instead of scanning every approved row via
+ * comments_score_idx.
+ */
+export const getPinnedThreadRef = async (
+	db: D1Database,
+	post_slug: string,
+): Promise<ThreadRef | null> =>
+	await db
+		.prepare(
+			`SELECT id, (score_up - score_down) AS score, created_at
+			   FROM comments
+			  WHERE post_slug = ? AND pinned_at IS NOT NULL
+			    AND parent_id IS NULL AND +status = 'approved'`,
+		)
+		.bind(post_slug)
+		.first<ThreadRef>();
+
+/**
+ * Pin or unpin one comment. Pinning is a two-statement batch — clear the
+ * post's current pin, then set the target — in that order, because the
+ * partial UNIQUE index rejects a second non-NULL pinned_at on the slug. The
+ * setter repeats the pinnable predicate so a comment spammed between the
+ * caller's check and this write is not pinned.
+ */
+export const setCommentPin = async (
+	db: D1Database,
+	comment: { id: string; post_slug: string },
+	pinned: boolean,
+): Promise<void> => {
+	if (!pinned) {
+		await db
+			.prepare("UPDATE comments SET pinned_at = NULL WHERE id = ?")
+			.bind(comment.id)
+			.run();
+		return;
+	}
+	await db.batch([
+		db
+			.prepare(
+				"UPDATE comments SET pinned_at = NULL WHERE post_slug = ? AND pinned_at IS NOT NULL",
+			)
+			.bind(comment.post_slug),
+		db
+			.prepare(
+				`UPDATE comments SET pinned_at = ?
+				  WHERE id = ? AND parent_id IS NULL AND status = 'approved'`,
+			)
+			.bind(Date.now(), comment.id),
+	]);
+};
+
+/**
  * Every visible comment belonging to the given top-level threads.
  *
  * Replaces a query that selected EVERY comment on the slug with no LIMIT at
@@ -772,6 +848,11 @@ export const getThreadCreatedAt = async (
  * `truncated` reports that TREE_ROW_LIMIT clipped the result; the caller logs
  * it. Rows come back created_at ASC so the builder's sibling ordering is a
  * no-op scan.
+ *
+ * The ids travel as ONE JSON-array bind read back through `json_each`, not one
+ * `?` each: D1 caps a query at 100 bound parameters, and a page is up to 200
+ * threads (`comments_per_page` max) plus the pinned one, plus the limit and
+ * the signed-in visibility binds.
  */
 export const listCommentsForThreads = async (
 	db: D1Database,
@@ -781,12 +862,11 @@ export const listCommentsForThreads = async (
 	if (threadIds.length === 0) return { rows: [], truncated: false };
 	const seed = visiblePredicate(viewer_id, "s");
 	const step = visiblePredicate(viewer_id, "c");
-	const placeholders = threadIds.map(() => "?").join(",");
 	const result = await db
 		.prepare(
 			`WITH RECURSIVE thread(id) AS (
 			 	SELECT s.id FROM comments s
-			 	 WHERE s.id IN (${placeholders}) AND ${seed.sql}
+			 	 WHERE s.id IN (SELECT value FROM json_each(?)) AND ${seed.sql}
 			 	UNION
 			 	SELECT c.id FROM comments c
 			 	 JOIN thread t ON c.parent_id = t.id
@@ -799,7 +879,7 @@ export const listCommentsForThreads = async (
 			 LIMIT ?`,
 		)
 		.bind(
-			...threadIds,
+			JSON.stringify(threadIds),
 			...seed.binds,
 			...step.binds,
 			TREE_ROW_LIMIT + 1,
@@ -825,7 +905,7 @@ export const listLatestApprovedComments = async (
 		.prepare(
 			`SELECT c.id, c.post_slug, c.parent_id, c.user_id, c.body_md, c.body_html,
 			        c.renderer_version, c.status, c.edited_at, c.deleted_at, c.deleted_by,
-			        c.ip_hash, c.user_agent, c.created_at, c.depth, c.score_up, c.score_down,
+			        c.ip_hash, c.user_agent, c.created_at, c.depth, c.score_up, c.score_down, c.pinned_at, c.as_staff,
 			        u.name AS author_name
 			   FROM comments c
 			   JOIN users u ON u.id = c.user_id
@@ -1302,7 +1382,7 @@ export const countPageReactionsBySlugs = async (
  * Admin: page through comments by status, newest first. Cursor is the
  * created_at,id pair of the last row from the previous page.
  */
-export type AdminComment = Comment & {
+export type AdminComment = Omit<Comment, "as_staff"> & {
 	author_name: string | null;
 	author_email: string | null;
 	author_avatar_url: string | null;
@@ -1315,6 +1395,10 @@ export type AdminComment = Comment & {
 	// them, to link a row back to the page it was posted on.
 	post_url?: string | null;
 	post_title?: string | null;
+	// Optional for the same reason: only adminGetCommentDetail's top-level
+	// `comment` query selects it — the parent/replies/ip_siblings/user_recent
+	// side-queries on the same page don't.
+	as_staff?: number;
 };
 
 type AdminCommentRow = Omit<
@@ -1395,7 +1479,7 @@ export const adminListComments = async (
 	const sql = `
 		SELECT c.id, c.post_slug, c.parent_id, c.user_id, c.body_md, c.body_html,
 		       c.renderer_version, c.status, c.edited_at, c.deleted_at, c.deleted_by,
-		       c.ip_hash, c.user_agent, c.created_at, c.depth, c.score_up, c.score_down,
+		       c.ip_hash, c.user_agent, c.created_at, c.depth, c.score_up, c.score_down, c.pinned_at, c.as_staff,
 		       u.name       AS author_name,
 		       u.email      AS author_email,
 		       u.avatar_url AS author_avatar_url,
@@ -1509,10 +1593,23 @@ export const setUserRole = async (
 	role: UserRole,
 ): Promise<void> => {
 	const is_admin = role === "admin" ? 1 : 0;
-	await db
+	const setRole = db
 		.prepare(`UPDATE users SET role = ?, is_admin = ? WHERE id = ?`)
-		.bind(role, is_admin, id)
-		.run();
+		.bind(role, is_admin, id);
+	if (role !== "user") {
+		await setRole.run();
+		return;
+	}
+	// A demoted account's staff marks would otherwise keep claiming a role it
+	// no longer holds. Same batch so the two can't disagree. Cached tree pages
+	// age out on their 60 s TTL: which posts this user touched isn't tracked
+	// here, and a per-post bust for a rare admin action isn't worth a query.
+	await db.batch([
+		setRole,
+		db
+			.prepare(`UPDATE comments SET as_staff = 0 WHERE user_id = ? AND as_staff = 1`)
+			.bind(id),
+	]);
 };
 
 /** What an erasure touched. Counts only — never the values removed. */
@@ -1597,10 +1694,13 @@ export const eraseUserData = async (
 			)
 			.bind(placeholderName, now, id),
 	);
+	// as_staff rides along here rather than its own statement: an erased staff
+	// account's surviving comments (redactBodies off) would otherwise keep
+	// showing the Staff badge for an identity that no longer exists.
 	const atComments = queue(
 		db
 			.prepare(
-				`UPDATE comments SET ip_hash = NULL, user_agent = NULL
+				`UPDATE comments SET ip_hash = NULL, user_agent = NULL, as_staff = 0
 				  WHERE user_id = ?`,
 			)
 			.bind(id),
@@ -2555,6 +2655,9 @@ export const ADMIN_ACTIONS = [
 	"unban",
 	"user.erase",
 	"user.export",
+	// Whole-site download. Meta is `{format, counts, complete}` — row counts
+	// only, never contents, same rule as `user.export`.
+	"site.export",
 	"user.revoke_sessions",
 	"rerender",
 	"seed-demo",
@@ -2589,6 +2692,9 @@ export const ADMIN_ACTIONS = [
 	// A moderator reply posted from the admin panel. Free text, optionally
 	// prefilled from a saved reply — `meta.saved_reply_id` records which.
 	"comment.reply",
+	// Pinning a top-level comment above the sort. meta carries the slug only.
+	"comment.pin",
+	"comment.unpin",
 	"import.disqus",
 	// Landed alongside `import.disqus` in routes/admin.ts, but never added
 	// here — so rows for these three sources were audited but unfilterable
@@ -3085,7 +3191,7 @@ export const adminGetCommentDetail = async (
 		.prepare(
 			`SELECT c.id, c.post_slug, c.parent_id, c.user_id, c.body_md, c.body_html,
 			        c.renderer_version, c.status, c.edited_at, c.deleted_at, c.deleted_by,
-			        c.ip_hash, c.user_agent, c.created_at, c.depth,
+			        c.ip_hash, c.user_agent, c.created_at, c.depth, c.pinned_at, c.as_staff,
 			        u.name       AS author_name,
 			        u.email      AS author_email,
 			        u.avatar_url AS author_avatar_url,

@@ -48,6 +48,8 @@ export const pl = {
 	"err.delete.not_author": "Można usuwać tylko własne komentarze.",
 	"err.not_found": "Nie znaleziono.",
 	"err.banned": "To konto jest zablokowane.",
+	"err.staff.forbidden":
+		"Tylko zalogowany personel może oznaczyć komentarz jako pochodzący od personelu.",
 	"err.thread_closed": "Komentarze do tego wpisu są zamknięte.",
 	"err.internal": "Coś poszło nie tak. Spróbuj ponownie.",
 

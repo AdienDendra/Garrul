@@ -98,18 +98,31 @@ signed-in commenters too"**) if you want them challenged as well.
 git clone https://github.com/KingPin/Garrul.git comments
 cd comments
 npm install
-cp wrangler.example.toml wrangler.toml
-cp .dev.vars.example .dev.vars
 npm run setup
 ```
 
-`npm run setup` will:
+`npm run setup` takes a fresh clone to a live Worker. Every step after
+the secrets asks first and can be skipped. Re-running it keeps the IDs,
+secrets and vars already in place. In order, it:
 
-- create the D1 database (`garrul-db`) and four KV namespaces,
-- write their generated IDs into `wrangler.toml`,
-- generate `JWT_SECRET` and `IP_HASH_SECRET` and stream them
-  straight into Cloudflare — the values are never written to disk,
-- then offer two ways to set the remaining secrets.
+1. copies `wrangler.example.toml` to `wrangler.toml` (an existing
+   `wrangler.toml` is kept),
+2. asks where the Worker answers requests (step 5 explains the choice),
+3. creates the D1 database (`garrul-db`) and four KV namespaces and
+   writes their IDs into `wrangler.toml`,
+4. generates `JWT_SECRET` and `IP_HASH_SECRET` and streams them
+   straight into Cloudflare — the values are never written to disk,
+5. offers two ways to set the remaining secrets (below),
+6. asks for the four `[vars]` that ship as placeholders
+   (`ALLOWED_ORIGINS`, `ADMIN_EMAILS`, `PUBLIC_BASE_URL`,
+   `OAUTH_CALLBACK_BASE`). A value you already set is the default, and
+   Enter keeps it. `OAUTH_CALLBACK_BASE` defaults to `PUBLIC_BASE_URL`,
+7. applies migrations to the production D1 (step 6),
+8. deploys (step 7),
+9. checks `/api/v1/health` (step 8).
+
+If you skip a step, setup prints it at the end as a command to run.
+Steps 5–7 below say what each stage does and how to do it by hand.
 
 ### Bulk or one at a time
 
@@ -163,7 +176,8 @@ the value off disk and out of your shell history.
 
 ## 5. Configure `wrangler.toml`
 
-Open `wrangler.toml` and set the non-secret values:
+Setup asks for the four placeholder vars in step 4. To change them
+later, or to set the optional ones, edit `[vars]` in `wrangler.toml`:
 
 ```toml
 [vars]
@@ -181,8 +195,10 @@ deployments on the same free tier; the only difference is sign-in.
 **Trying it out — `*.workers.dev`.** Leave the `routes` block
 commented out and deploy. Cloudflare hands you a
 `garrul.<your-subdomain>.workers.dev` URL, which `wrangler deploy`
-prints in step 7. Set `PUBLIC_BASE_URL`, `OAUTH_CALLBACK_BASE` and
-`ALLOWED_ORIGINS` to match once you have it.
+prints in step 7. Leave `PUBLIC_BASE_URL` and `OAUTH_CALLBACK_BASE`
+empty at the setup prompt. After the deploy, setup offers to fill both
+from that URL and redeploy. `ALLOWED_ORIGINS` is still the site that
+embeds the widget.
 
 **Running it for real — a custom subdomain.** Uncomment the `routes`
 block and point it at your subdomain:
@@ -209,6 +225,8 @@ stay exactly where they are.
 
 ## 6. Apply migrations to the production D1
 
+Setup runs this when you answer yes. To run it by hand:
+
 ```bash
 npm run migrate -- --remote
 ```
@@ -217,6 +235,8 @@ Without `-- --remote`, migrations run against the local Miniflare
 DB only — your deployed worker would 500 on the first request.
 
 ## 7. Deploy
+
+Setup runs this when you answer yes. To run it by hand:
 
 ```bash
 npm run deploy
@@ -227,19 +247,19 @@ custom domain is configured) provisions the DNS record. The first
 deploy can take ~30 seconds while the certificate is issued.
 
 Wrangler prints the live URL when it finishes. On the `*.workers.dev`
-path that URL is the one you didn't know yet in step 5 — put it into
-`PUBLIC_BASE_URL` and `OAUTH_CALLBACK_BASE` now and deploy once more.
-(`ALLOWED_ORIGINS` is unaffected: it lists the sites that embed the
-widget, not the Worker itself.)
+path, setup offers to write that URL into `PUBLIC_BASE_URL` and
+`OAUTH_CALLBACK_BASE` and redeploy. By hand: put the URL into both vars
+and run `npm run deploy` once more. (`ALLOWED_ORIGINS` is unaffected:
+it lists the sites that embed the widget, not the Worker itself.)
 
 ## 8. Verify
 
-Smoke test the deploy (substitute your `*.workers.dev` URL if you
-haven't set up a custom domain):
+Setup runs this health check for you. To repeat it (substitute your
+`*.workers.dev` URL if you haven't set up a custom domain):
 
 ```bash
-curl -fsSL https://comments.example.com/api/v1/health
-# → {"ok":true,...}
+curl -fsS https://comments.example.com/api/v1/health
+# → {"status":"ok","service":"garrul",...}
 ```
 
 Tail logs while you exercise it:
@@ -384,8 +404,9 @@ Safari ITP + sign-in, Resend domain verification, etc.
 For a no-Cloudflare local loop after the initial install:
 
 ```bash
-npm run migrate          # local Miniflare DB
-npm run dev              # http://localhost:8787
+cp .dev.vars.example .dev.vars   # local-only secrets; gitignored
+npm run migrate                  # local Miniflare DB
+npm run dev                      # http://localhost:8787
 ```
 
 `.dev.vars` holds local-only secrets. For OAuth or cross-origin

@@ -500,6 +500,90 @@ describe("bootstrap — tree cache is the same entry /comments uses", () => {
 	});
 });
 
+describe("bootstrap — view=engagement", () => {
+	const VIEW = `/api/v1/bootstrap?slug=${SLUG}&view=engagement`;
+	const bothOn = () =>
+		({
+			...env,
+			PAGE_REACTIONS_ENABLED: "true",
+			PAGE_VOTES_ENABLED: "true",
+		}) as unknown as Bindings;
+
+	it("serves config, user and engagement byte-identical to their endpoints", async () => {
+		env = bothOn();
+		sqlite
+			.prepare(
+				`INSERT INTO page_reactions (post_slug, user_id, kind, created_at)
+				 VALUES (?, ?, 'fire', ?)`,
+			)
+			.run(SLUG, USER, 1_700_000_000_000);
+		const boot = await json(VIEW, SID);
+		expect(boot.config).toEqual(await json("/api/v1/config"));
+		expect(boot.user).toEqual((await json("/api/v1/auth/me", SID)).user);
+		expect(boot.engagement).toEqual(
+			await json(`/api/v1/page-engagement?slug=${SLUG}`, SID),
+		);
+		expect(boot.engagement.my_reactions).toEqual(["fire"]);
+	});
+
+	it("resolves the locale like /config", async () => {
+		const boot = await json(`${VIEW}&lang=de`);
+		expect(boot.config).toEqual(await json("/api/v1/config?lang=de"));
+	});
+
+	it("carries only config and user when both page surfaces are off", async () => {
+		const boot = await json(VIEW);
+		expect(Object.keys(boot)).toEqual(["config", "user"]);
+		expect(boot.user).toBeNull();
+	});
+
+	it("never carries comments or subscription, even signed in with mail on", async () => {
+		env = {
+			...bothOn(),
+			EMAIL_FROM: "noreply@example.com",
+			PUBLIC_BASE_URL: "https://comments.example.com",
+		} as unknown as Bindings;
+		const boot = await json(VIEW, SID);
+		expect(boot).not.toHaveProperty("comments");
+		expect(boot).not.toHaveProperty("subscription");
+	});
+
+	it("neither touches the tree cache nor reads the comments table", async () => {
+		const seen: string[] = [];
+		const db = env.DB as unknown as { prepare: (sql: string) => unknown };
+		env = {
+			...env,
+			DB: { ...db, prepare: (sql: string) => (seen.push(sql), db.prepare(sql)) },
+		} as unknown as Bindings;
+		await get(VIEW);
+		expect(cache.store.size).toBe(0);
+		expect(seen.some((sql) => /\bFROM\s+comments\b/i.test(sql))).toBe(false);
+	});
+
+	// Mirrors the comments-table check above: this view carries no `subscription`
+	// section (asserted separately), and that has to hold even for a signed-in
+	// reader on an install with mail configured — the one combination where the
+	// full bootstrap does run a subscriptions query.
+	it("runs no subscriptions query, signed in with mail on", async () => {
+		const seen: string[] = [];
+		const db = env.DB as unknown as { prepare: (sql: string) => unknown };
+		env = {
+			...bothOn(),
+			EMAIL_FROM: "noreply@example.com",
+			PUBLIC_BASE_URL: "https://comments.example.com",
+			DB: { ...db, prepare: (sql: string) => (seen.push(sql), db.prepare(sql)) },
+		} as unknown as Bindings;
+		await get(VIEW, SID);
+		expect(seen.some((sql) => /\bFROM\s+subscriptions\b/i.test(sql))).toBe(false);
+	});
+
+	it.each(["bogus", "", "comments"])("rejects view=%j with 400", async (v) => {
+		const res = await get(`/api/v1/bootstrap?slug=${SLUG}&view=${v}`);
+		expect(res.status).toBe(400);
+		expect(await res.json()).toEqual({ error: "invalid_view" });
+	});
+});
+
 describe("bootstrap — slug validation", () => {
 	it("rejects a missing slug", async () => {
 		const res = await get("/api/v1/bootstrap");

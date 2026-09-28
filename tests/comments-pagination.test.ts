@@ -81,6 +81,9 @@ const makeD1 = (db: DatabaseSync): any => ({
 		let bound: unknown[] = [];
 		return {
 			bind(...args: unknown[]) {
+				// Real D1 rejects a query with more than 100 bound parameters;
+				// SQLite's own cap is far higher, so the stub has to enforce it.
+				if (args.length > 100) throw new Error(`D1: ${args.length} bound parameters > 100`);
 				bound = args;
 				return this;
 			},
@@ -916,6 +919,16 @@ describe("GET /comments — pinned thread", () => {
 		const tomb = page.threads.find((t) => t.id === mkUlid(1));
 		expect(tomb).toBeDefined();
 		expect("pinned" in tomb!).toBe(false);
+	});
+
+	it("a pin on a max-size page stays inside D1's 100-parameter cap", async () => {
+		seedThreads(202);
+		pin(1);
+		setSetting("comments_per_page", "200");
+		const page = await get(mkEnv(), `slug=${SLUG}&sort=new`);
+		expect(page.threads).toHaveLength(201);
+		expect(page.threads[0]!.id).toBe(mkUlid(1));
+		expect(subtreeQuery()!.binds.length).toBeLessThanOrEqual(100);
 	});
 
 	it("no pin, no key: an unpinned tree is byte-for-byte the old shape", async () => {

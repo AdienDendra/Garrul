@@ -848,6 +848,11 @@ export const setCommentPin = async (
  * `truncated` reports that TREE_ROW_LIMIT clipped the result; the caller logs
  * it. Rows come back created_at ASC so the builder's sibling ordering is a
  * no-op scan.
+ *
+ * The ids travel as ONE JSON-array bind read back through `json_each`, not one
+ * `?` each: D1 caps a query at 100 bound parameters, and a page is up to 200
+ * threads (`comments_per_page` max) plus the pinned one, plus the limit and
+ * the signed-in visibility binds.
  */
 export const listCommentsForThreads = async (
 	db: D1Database,
@@ -857,12 +862,11 @@ export const listCommentsForThreads = async (
 	if (threadIds.length === 0) return { rows: [], truncated: false };
 	const seed = visiblePredicate(viewer_id, "s");
 	const step = visiblePredicate(viewer_id, "c");
-	const placeholders = threadIds.map(() => "?").join(",");
 	const result = await db
 		.prepare(
 			`WITH RECURSIVE thread(id) AS (
 			 	SELECT s.id FROM comments s
-			 	 WHERE s.id IN (${placeholders}) AND ${seed.sql}
+			 	 WHERE s.id IN (SELECT value FROM json_each(?)) AND ${seed.sql}
 			 	UNION
 			 	SELECT c.id FROM comments c
 			 	 JOIN thread t ON c.parent_id = t.id
@@ -875,7 +879,7 @@ export const listCommentsForThreads = async (
 			 LIMIT ?`,
 		)
 		.bind(
-			...threadIds,
+			JSON.stringify(threadIds),
 			...seed.binds,
 			...step.binds,
 			TREE_ROW_LIMIT + 1,

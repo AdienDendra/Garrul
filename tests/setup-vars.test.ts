@@ -27,6 +27,8 @@ ENV = "production"
 ALLOWED_ORIGINS = "https://yourblog.example.com"
 PUBLIC_BASE_URL = 'https://c.blog.test'
 OAUTH_CALLBACK_BASE = "https://comments.example.com"
+QUOTE_IN_DOUBLE = "it's a test"
+QUOTE_IN_SINGLE = 'say "hi"'
 
 [env.staging.vars]
 ALLOWED_ORIGINS = "https://staging.example.com"
@@ -58,6 +60,13 @@ describe("setup.sh [vars] helpers", () => {
 			"get_var ALLOWED_ORIGINS wrangler.toml; get_var PUBLIC_BASE_URL wrangler.toml; get_var MISSING wrangler.toml",
 		);
 		expect(r.stdout).toBe("https://yourblog.example.com\nhttps://c.blog.test\n");
+	});
+
+	it("doesn't cut a value short at the other quote character it's not wrapped in", () => {
+		const r = sh(
+			"get_var QUOTE_IN_DOUBLE wrangler.toml; get_var QUOTE_IN_SINGLE wrangler.toml",
+		);
+		expect(r.stdout).toBe('it\'s a test\nsay "hi"\n');
 	});
 
 	it("rewrites one line and leaves the rest byte-identical", () => {

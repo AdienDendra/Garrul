@@ -426,12 +426,20 @@ confirm_yes() {
 # overrides are not read: setup only configures the default environment.
 get_var() {
 	awk -v name="$1" '
-		BEGIN { q = "[\"" sprintf("%c", 39) "]" }
+		BEGIN { dq = "\""; sq = sprintf("%c", 39) }
 		/^[[:space:]]*\[/ { invars = ($0 ~ /^[[:space:]]*\[vars\][[:space:]]*(#.*)?$/); next }
 		invars && $0 ~ ("^[[:space:]]*" name "[[:space:]]*=") {
 			v = $0
-			sub("^[^=]*=[[:space:]]*" q, "", v)
-			sub(q ".*$", "", v)
+			sub("^[^=]*=[[:space:]]*", "", v)
+			# Strip only the quote style this value actually opened with, so a
+			# double-quoted value containing an apostrophe (or vice versa) is
+			# not cut short at that inner character.
+			q = substr(v, 1, 1)
+			if (q == dq || q == sq) {
+				v = substr(v, 2)
+				i = index(v, q)
+				if (i > 0) v = substr(v, 1, i - 1)
+			}
 			print v
 			exit
 		}

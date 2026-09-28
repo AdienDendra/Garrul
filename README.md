@@ -55,6 +55,18 @@ dashboard page); every other integration is optional.
   Telegram
 - **Telegram operator bot**: moderate from your phone with inline
   buttons, `/queue` and `/stats`, optional daily digest
+- **Pinned comments** — moderators pin one top-level comment per post; it
+  shows first on page one
+- **Staff badge** — moderators and admins can mark a comment as posted by
+  staff; the label is configurable
+- **Choose your reactions** — pick which of 12 reaction emoji appear on
+  comments and on the page bar, in any order
+- **Reactions-only mount** — `data-mode="reactions"` renders just the page
+  reaction/vote bar, in one request
+- **Full-site export** — admins download every post, comment and user as
+  JSON, or comments as CSV
+- **One-command install** — `npm run setup` creates resources, sets
+  secrets and vars, migrates, deploys and checks health
 
 Every doc in the repo, grouped by task:
 [`docs/README.md`](docs/README.md).

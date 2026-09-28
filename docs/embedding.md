@@ -7,8 +7,8 @@ Jekyll, WordPress, plain HTML). Start there.
 
 This page covers what those recipes don't: what to allow in a host
 Content-Security-Policy, the iframe variant for hosts that can't change
-one, which language your readers see, and how to hand the whole thing to an
-AI assistant.
+one, the reactions-only bar, which language your readers see, and how to
+hand the whole thing to an AI assistant.
 
 ## Script tag (default)
 
@@ -68,6 +68,32 @@ The iframe page posts content height to the parent via
 `postMessage({type:"garrul:height", height})`. See
 [`../examples/iframe/index.html`](../examples/iframe/index.html) for a
 ~10-line auto-resize listener.
+
+## Reactions bar only
+
+For a page that wants a quick reaction row but no comment thread, set
+`data-mode="reactions"`:
+
+```html
+<div id="garrul" data-mode="reactions" data-slug="my-post-slug"
+     data-api="https://comments.example.com"></div>
+<script src="https://comments.example.com/embed.js" defer></script>
+```
+
+It renders the same page-level reactions/votes bar that sits atop a
+thread — same slug, same counts — and nothing else: no composer, no
+comments. The mount costs **one** Worker request
+(`/api/v1/bootstrap?slug=…&view=engagement`); the form-token call is
+never made because there is no form.
+
+- Turn on `PAGE_REACTIONS_ENABLED` and/or `PAGE_VOTES_ENABLED` (env or
+  admin Settings). With both off the element stays empty and the
+  browser console logs one warning saying why.
+- The widget doesn't reserve height in this mode; give `#garrul` a
+  `min-height` of about `4.5em` if the row must not shift the page.
+- One `#garrul` per page, so a page carries the bar *or* the thread.
+  The thread already includes the bar.
+- Iframe: `/embed/my-post-slug?mode=reactions`.
 
 ## Language
 

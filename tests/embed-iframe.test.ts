@@ -261,6 +261,30 @@ describe("GET /embed/:slug", () => {
 		});
 	});
 
+	describe("?mode=", () => {
+		it("maps mode=reactions onto data-mode", async () => {
+			const body = await fetchPage("/embed/hello?mode=reactions").then((r) => r.text());
+			expect(body).toContain('data-mode="reactions"');
+		});
+
+		it("emits no attribute when absent or unknown", async () => {
+			// Closed vocabulary: the widget treats any other value as the thread,
+			// so forwarding it would only put dead bytes in a cached page.
+			for (const q of ["", "?mode=thread", "?mode=REACTIONS"]) {
+				const body = await fetchPage(`/embed/hello${q}`).then((r) => r.text());
+				expect(body).not.toContain("data-mode");
+			}
+		});
+
+		it("cannot break out of the attribute", async () => {
+			const body = await fetchPage(
+				`/embed/hello?mode=${encodeURIComponent('reactions" onload="alert(1)')}`,
+			).then((r) => r.text());
+			expect(body).not.toContain("onload");
+			expect(body).not.toContain("data-mode");
+		});
+	});
+
 	it("keeps the ?api= override gated on the allowlist", async () => {
 		// Regression guard on the pattern parent_origin was modelled after: an
 		// unlisted override would load attacker-controlled JS into the frame,

@@ -208,8 +208,11 @@ export const exportStream = (
 			}
 		},
 		async cancel() {
-			await chunks.return(undefined);
-			await close(false);
+			try {
+				await chunks.return(undefined);
+			} finally {
+				await close(false);
+			}
 		},
 	});
 };

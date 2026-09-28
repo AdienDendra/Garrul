@@ -205,4 +205,53 @@ describe("exportStream", () => {
 		await reader.cancel();
 		expect(calls).toEqual([false]);
 	});
+
+	it("closes once with complete=false and errors the stream when a page read throws", async () => {
+		async function* throwing() {
+			yield "a";
+			throw new Error("page query failed");
+		}
+		const calls: boolean[] = [];
+		const body = exportStream(throwing(), async (c) => {
+			calls.push(c);
+		});
+		await expect(new Response(body).text()).rejects.toThrow();
+		expect(calls).toEqual([false]);
+	});
+
+	it("still closes with complete=false when the generator's return() throws on cancel", async () => {
+		// A hand-rolled AsyncGenerator rather than `try {} finally { throw }` in a
+		// generator function body, which biome's noUnsafeFinally rejects.
+		const values = ["a", "b"];
+		let i = 0;
+		const chunksThatRefuseToStop: AsyncGenerator<string> = {
+			async next(): Promise<IteratorResult<string>> {
+				if (i < values.length) {
+					const value = values[i]!;
+					i++;
+					return { done: false, value };
+				}
+				return { done: true, value: undefined };
+			},
+			async return(): Promise<IteratorResult<string>> {
+				throw new Error("return() blew up");
+			},
+			async throw(err) {
+				throw err;
+			},
+			[Symbol.asyncIterator]() {
+				return this;
+			},
+			async [Symbol.asyncDispose]() {
+				await this.return(undefined);
+			},
+		};
+		const calls: boolean[] = [];
+		const reader = exportStream(chunksThatRefuseToStop, async (c) => {
+			calls.push(c);
+		}).getReader();
+		await reader.read();
+		await expect(reader.cancel()).rejects.toThrow();
+		expect(calls).toEqual([false]);
+	});
 });

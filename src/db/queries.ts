@@ -1686,10 +1686,13 @@ export const eraseUserData = async (
 			)
 			.bind(placeholderName, now, id),
 	);
+	// as_staff rides along here rather than its own statement: an erased staff
+	// account's surviving comments (redactBodies off) would otherwise keep
+	// showing the Staff badge for an identity that no longer exists.
 	const atComments = queue(
 		db
 			.prepare(
-				`UPDATE comments SET ip_hash = NULL, user_agent = NULL
+				`UPDATE comments SET ip_hash = NULL, user_agent = NULL, as_staff = 0
 				  WHERE user_id = ?`,
 			)
 			.bind(id),

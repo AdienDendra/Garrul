@@ -174,6 +174,8 @@ beforeEach(() => {
 		"unrelated", "<p>unrelated</p>",
 		"approved", "other-ip", "Mozilla/5.0 (other)", 1_700_000_002_000,
 	);
+	// The target once had staff status and marked this comment with the badge.
+	sqlite.prepare("UPDATE comments SET as_staff = 1 WHERE id = ?").run(TARGET_COMMENT);
 
 	// A subscription on the target's address, with an unsent notification hanging
 	// off it — the FK that makes delete order matter.
@@ -331,6 +333,13 @@ describe("POST /admin/api/users/:id/erase — comment data", () => {
 		const theirs = commentRow(OTHER_COMMENT);
 		expect(theirs.ip_hash).toBe("other-ip");
 		expect(theirs.user_agent).toBe("Mozilla/5.0 (other)");
+	});
+
+	it("clears as_staff so a surviving comment shows no Staff badge for an erased account", async () => {
+		await erase({ confirm: "ERASE", redact_bodies: false });
+		expect(commentRow(TARGET_COMMENT).as_staff).toBe(0);
+		// Not touching anyone else's.
+		expect(commentRow(OTHER_COMMENT).as_staff).toBe(0);
 	});
 
 	it("keeps the comment readable by default — anonymizing the author is the default, not deleting the thread", async () => {

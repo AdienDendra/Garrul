@@ -544,6 +544,19 @@ describe("renderOperator", () => {
 		expect(html).toContain(`Max upload: ${mb} MB`);
 		expect(html).toContain(`file too large (max ${mb} MB)`);
 	});
+
+	it("offers the site export as plain links with the read-quota warning", () => {
+		const html = renderOperator({
+			rerender: { current_version: 1, up_to_date: 0, stale: 0, oldest_version: null },
+			retention: retentionOff,
+			audit_retention: auditRetentionOff,
+			seed_demo_allowed: false,
+		});
+		expect(html).toContain("Export site data");
+		expect(html).toContain(`<a href="/admin/api/export?format=json">Download JSON</a>`);
+		expect(html).toContain(`<a href="/admin/api/export?format=csv">Download CSV</a>`);
+		expect(html).toContain("daily read quota");
+	});
 });
 
 describe("renderUpdateBanner", () => {

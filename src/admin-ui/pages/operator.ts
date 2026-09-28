@@ -182,6 +182,23 @@ const auditRetentionCard = (r: AuditRetentionStats): string => {
 </div>`;
 };
 
+// Plain links, not fetch: the browser saves the stream straight to disk, the
+// payload never sits in a JS variable, and a same-origin <a> is exactly what
+// the route's Sec-Fetch-Site gate expects.
+const exportCard = `
+<div class="card">
+  <h3>Export site data</h3>
+  <p class="muted">Every post, comment (all statuses), user, vote, reaction,
+    page vote/reaction and confirmed subscription. JSON is the full backup;
+    CSV is the comments alone, for a spreadsheet — cells that a spreadsheet
+    would run as a formula get a leading <code>'</code>. Hashed IPs, user
+    agents and subscription tokens are never included; user emails are.</p>
+  <p class="muted">One export reads every row, which counts against the D1
+    free-tier daily read quota. Each download is recorded in the audit log.</p>
+  <p><a href="/admin/api/export?format=json">Download JSON</a> ·
+    <a href="/admin/api/export?format=csv">Download CSV</a></p>
+</div>`;
+
 export const renderOperator = (data: OperatorData): string => {
 	const { rerender, retention, audit_retention, seed_demo_allowed } = data;
 	const seedCard = seed_demo_allowed
@@ -276,6 +293,7 @@ export const renderOperator = (data: OperatorData): string => {
 
 ${retentionCard(retention)}
 ${auditRetentionCard(audit_retention)}
+${exportCard}
 
 ${seedCard}
 

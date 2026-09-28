@@ -153,6 +153,11 @@ rather than nulled — `engagement` unless a page-level reaction or vote
 surface is on, `subscription` unless the reader is signed in on an
 install configured to send mail.
 
+`&view=engagement` asks for the standalone reactions bar's slice only —
+`config`, `user` and (when a page flag is on) `engagement`, each still
+byte-identical to its endpoint. No `comments`, no `subscription`, no tree
+read. Any other `view` value is `400 {"error":"invalid_view"}`.
+
 Before v2.15.0 the mount cost up to five requests, in two serial
 waves: `/api/v1/config` had to be fully awaited (the tree request
 needs the resolved locale) before `/api/v1/auth/me` and

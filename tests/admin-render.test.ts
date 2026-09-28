@@ -28,6 +28,7 @@ import type { RetentionStats } from "../src/db/ip-retention";
 import type { AuditRetentionStats } from "../src/db/audit-retention";
 import { renderSettings } from "../src/admin-ui/pages/settings";
 import { MAX_IMPORT_BYTES } from "../src/lib/import/core";
+import { REACTION_KINDS } from "../src/widget/reactions";
 import { renderDashboard } from "../src/admin-ui/pages/dashboard";
 import { layout, renderUpdateBanner } from "../src/admin-ui/layout";
 import {
@@ -903,6 +904,25 @@ describe("renderSettings field-name contract", () => {
 			texts,
 		);
 		expect(withSecret).toContain("hasFormTsSecret: true");
+	});
+
+	it("renders a reaction-kind chip list per surface", () => {
+		for (const key of ["comment_reaction_kinds", "page_reaction_kinds"]) {
+			expect(html).toContain(`chipOrder('${key}')`);
+			expect(html).toContain(`toggleKind('${key}', kind)`);
+			expect(html).toContain(`moveKind('${key}', kind, -1)`);
+		}
+	});
+
+	it("seeds every vocabulary kind with its glyph and English label", () => {
+		for (const r of REACTION_KINDS) {
+			expect(html).toContain(`&quot;${r.kind}&quot;:{&quot;emoji&quot;:&quot;${r.emoji}&quot;`);
+		}
+		expect(html).toContain("&quot;label&quot;:&quot;Agree&quot;");
+	});
+
+	it("warns that a long comment list gets crowded", () => {
+		expect(html).toContain("more than about six");
 	});
 });
 

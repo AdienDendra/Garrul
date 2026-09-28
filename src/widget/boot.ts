@@ -236,6 +236,11 @@ const noBootstrap = new Set<string>();
  * over-quota answer is an HTTP response, not a failed connection, so nothing is
  * amplified here — and a fetch that never lands is the one case where something
  * could be blocking this path specifically while the older ones still work.
+ *
+ * `view: "engagement"` is the standalone reactions bar's request. It has no
+ * comment tree by design, so "mountable" there means a `config` object — the
+ * one section that view always carries (`user` may be null, `engagement` is
+ * omitted when both page flags are off). The 404 / throw rules are unchanged.
  */
 export const fetchBootstrap = async (
 	apiBase: string,
@@ -243,11 +248,13 @@ export const fetchBootstrap = async (
 	sort: SortKey | null,
 	langExplicit: string,
 	langHint: string,
+	view: "engagement" | null = null,
 ): Promise<BootstrapResponse | null> => {
 	if (noBootstrap.has(apiBase)) return null;
 
 	const qs = new URLSearchParams({ slug });
 	if (sort) qs.set("sort", sort);
+	if (view) qs.set("view", view);
 	localeParams(qs, langExplicit, langHint);
 
 	// Only the request is guarded here. Widening this to cover the status check
@@ -275,6 +282,10 @@ export const fetchBootstrap = async (
 	try {
 		const body = (await res.json()) as BootstrapResponse | null;
 		if (!body) return null;
+		if (view === "engagement") {
+			const cfg = body.config as unknown;
+			return cfg && typeof cfg === "object" && !Array.isArray(cfg) ? body : null;
+		}
 		// A thread array is what "this is a mountable answer" means. Anything else
 		// — an error envelope, a truncated proxy response, a captive portal's login
 		// page served as JSON — is not one, and the legacy path is a far better

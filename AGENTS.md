@@ -301,6 +301,7 @@ Every attribute the widget reads from the `#garrul` host element
 | `data-url`   | no       | Canonical permalink; sent on every comment create (top-level and reply). The first non-null value wins and later values are ignored. Used in RSS and notification emails. |
 | `data-published` | no   | Article publish time (epoch ms or ISO 8601). On the iframe variant pass it as `?published=` (§6). The widget sends it as `post_published` on every comment create (top-level and reply); the server records it only on the request that creates the post row and never changes it after that — it arrives on an unauthenticated POST, and an old enough value closes the thread for good, so a later request cannot supply or move it. Anchors age-based auto-close (`AUTO_CLOSE_DAYS`). Omit it and Garrul anchors on first-engagement time, which closes a bit later than intended. If a reaction, page vote or admin action created the row before the first comment, the slug keeps that first-engagement anchor. Repair today is direct D1 SQL on `posts.published_at`; an admin edit surface is a separate backlog item. |
 | `data-lang`  | no       | BCP-47 tag pinning the widget's interface language (see "Language" below). Unrecognized tags fall back to English rather than erroring. |
+| `data-mode`  | no       | `reactions` mounts only the page-level reactions/votes bar (no thread, no composer) in one request (`/api/v1/bootstrap?…&view=engagement`). Needs `PAGE_REACTIONS_ENABLED` and/or `PAGE_VOTES_ENABLED`; with both off it renders nothing and logs one console warning. Any other value is the normal thread. |
 
 The host element MUST have `id="garrul"`; the widget looks it up by ID
 and mounts a Shadow DOM on it. One widget per page — multi-thread
@@ -539,6 +540,11 @@ writing a comment. Both surfaces default **off** and are server-gated:
   emoji, so 🤔 isn't left ambiguous between "interesting" and "I doubt
   that". Per-comment reactions stay compact — same label, but as the
   button's accessible name rather than visible text.
+- **Standalone bar** (`data-mode="reactions"`): the same bar without the
+  thread — for pages that want reactions but no comments. Same slug, same
+  counts as the bar atop that slug's thread. One `#garrul` per page, so a
+  page carries either the bar or the thread (which already includes it).
+  Iframe: `/embed/<slug>?mode=reactions`.
 
 ### Configurable reaction kinds (since v2.30.0)
 

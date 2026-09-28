@@ -3048,7 +3048,8 @@ const init = () => {
 	const root = host.attachShadow({ mode: "open" });
 	const style = el("style");
 	style.textContent = STYLE_CSS;
-	root.append(style, buildSkeleton());
+	root.append(style);
+	if (host.dataset.mode !== "reactions") root.append(buildSkeleton());
 
 	// Hand the height back as soon as there is real content to measure. Holding
 	// the reservation would leave a short thread — "be the first to comment"
@@ -3094,6 +3095,9 @@ const reserveSpace = () => {
 	// yet, and init() will find it on DOMContentLoaded either way.
 	const host = document.getElementById("garrul");
 	if (!host) return;
+	// A lone reactions bar is one row, not three skeleton comments; reserving
+	// 220px would shift the page the other way when it lands.
+	if (host.dataset.mode === "reactions") return;
 	const existing = getComputedStyle(host).minHeight;
 	if (existing && existing !== "0px" && existing !== "auto") return;
 	// Three skeleton rows and their gaps. Deliberately not the loaded widget's
@@ -3567,6 +3571,9 @@ const loadOnce = async (
 	host: HTMLElement,
 	sort: SortKey | null,
 ) => {
+	// data-mode="reactions": the page engagement bar alone. Anything else is the
+	// full thread, so a typo degrades to the default widget rather than to nothing.
+	const reactionsOnly = host.dataset.mode === "reactions";
 	// The instance's identity for draft keys — see WidgetCtx.apiOrigin.
 	const apiOrigin = new URL(apiBase).origin;
 	let siteKey: string | null = null;
@@ -3601,7 +3608,14 @@ const loadOnce = async (
 	// error here, exactly as the legacy tree fetch does further down.
 	let boot: BootstrapResponse | null;
 	try {
-		boot = await fetchBootstrap(apiBase, slug, sort, langExplicit, langHint);
+		boot = await fetchBootstrap(
+			apiBase,
+			slug,
+			reactionsOnly ? null : sort,
+			langExplicit,
+			langHint,
+			reactionsOnly ? "engagement" : null,
+		);
 	} catch (err) {
 		// renderError replaces the shadow tree, so the composer this handle
 		// belongs to is about to vanish.
@@ -3689,6 +3703,78 @@ const loadOnce = async (
 		setFormTokenEnabled(true);
 	}
 
+	const reload = () => {
+		void load(root, slug, apiBase, host);
+	};
+	const permalinkFor = (id: string): string =>
+		commentHref(id, {
+			dataUrl: host.dataset.url,
+			locationHref: window.location.href,
+			apiBase,
+		});
+	const makeCtx = (
+		me: Me,
+		acceptingComments: boolean,
+		closedReason: WidgetCtx["closedReason"],
+	): WidgetCtx => ({
+		apiBase,
+		apiOrigin,
+		slug,
+		host,
+		root,
+		me,
+		editWindowMs: editWindowMinutes * 60_000,
+		turnstileSiteKey: siteKey,
+		turnstileAlways,
+		commentsEnabled,
+		acceptingComments,
+		closedReason,
+		reactionsEnabled,
+		votingEnabled,
+		downvotesEnabled,
+		pageReactionsEnabled,
+		pageVotesEnabled,
+		reactionKinds,
+		pageReactionKinds,
+		subscriptionsEnabled,
+		repliesPerThread,
+		autoCollapseDepth,
+		communityMinVotes,
+		communityCollapseRatio,
+		seed: {
+			bootstrapped: boot != null,
+			engagement: boot?.engagement,
+			subscription: boot?.subscription,
+		},
+		reload,
+		revealAfterReload: (id: string | null, announce?: string) =>
+			revealAfterReload(root, id, announce),
+		permalinkFor,
+	});
+
+	if (reactionsOnly) {
+		root.replaceChildren();
+		if (!pageReactionsEnabled && !pageVotesEnabled) {
+			// Nothing to show and nothing to fetch. One line for the operator
+			// wondering why the embed is empty; readers see nothing at all.
+			console.warn(
+				'[garrul] data-mode="reactions": page reactions and page votes are both off (PAGE_REACTIONS_ENABLED / PAGE_VOTES_ENABLED) — nothing to render',
+			);
+			return;
+		}
+		// The bar never reads ctx.me (its `mine` state comes from
+		// /page-engagement), so the legacy path skips /auth/me. The bar applies
+		// the bootstrap seed, or GETs /page-engagement itself when
+		// seed.bootstrapped is false — never /comments, never form-token.
+		const me = boot ? ((boot.user ?? null) as Me) : null;
+		const style = el("style");
+		style.textContent = STYLE_CSS;
+		const wrap = el("div", "gr-root");
+		wrap.appendChild(buildPageEngagement(makeCtx(me, false, null)));
+		root.append(style, wrap);
+		return;
+	}
+
 	let me: Me;
 	let data: ListResponse;
 	if (boot) {
@@ -3741,50 +3827,7 @@ const loadOnce = async (
 	style.textContent = STYLE_CSS;
 
 	const wrap = el("div", "gr-root");
-	const reload = () => {
-		void load(root, slug, apiBase, host);
-	};
-	const permalinkFor = (id: string): string =>
-		commentHref(id, {
-			dataUrl: host.dataset.url,
-			locationHref: window.location.href,
-			apiBase,
-		});
-	const ctx: WidgetCtx = {
-		apiBase,
-		apiOrigin,
-		slug,
-		host,
-		root,
-		me,
-		editWindowMs: editWindowMinutes * 60_000,
-		turnstileSiteKey: siteKey,
-		turnstileAlways,
-		commentsEnabled,
-		acceptingComments,
-		closedReason,
-		reactionsEnabled,
-		votingEnabled,
-		downvotesEnabled,
-		pageReactionsEnabled,
-		pageVotesEnabled,
-		reactionKinds,
-		pageReactionKinds,
-		subscriptionsEnabled,
-		repliesPerThread,
-		autoCollapseDepth,
-		communityMinVotes,
-		communityCollapseRatio,
-		seed: {
-			bootstrapped: boot != null,
-			engagement: boot?.engagement,
-			subscription: boot?.subscription,
-		},
-		reload,
-		revealAfterReload: (id: string | null, announce?: string) =>
-			revealAfterReload(root, id, announce),
-		permalinkFor,
-	};
+	const ctx = makeCtx(me, acceptingComments, closedReason);
 	// Publish it for `submit()`, which is wired to a composer built before this
 	// context existed. See `mountCtx`.
 	mountCtx.set(root, ctx);

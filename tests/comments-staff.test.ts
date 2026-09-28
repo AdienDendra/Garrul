@@ -98,7 +98,9 @@ describe("POST /comments — as_staff", () => {
 	it("refuses as_staff from a non-staff session with 403 and writes nothing", async () => {
 		const res = await post(READER_SID, { as_staff: true });
 		expect(res.status).toBe(403);
-		expect(await res.json()).toEqual({ error: "forbidden" });
+		expect(await res.json()).toEqual({
+			error: "Only signed-in staff can mark a comment as staff.",
+		});
 		expect(count()).toBe(0);
 	});
 
@@ -129,7 +131,9 @@ describe("POST /comments — as_staff needs a session", () => {
 	it("refuses an anonymous caller with 403 and writes nothing", async () => {
 		const res = await anonPost({ as_staff: true, turnstile_token: "x" });
 		expect(res.status).toBe(403);
-		expect(await res.json()).toEqual({ error: "forbidden" });
+		expect(await res.json()).toEqual({
+			error: "Only signed-in staff can mark a comment as staff.",
+		});
 		expect(count()).toBe(0);
 	});
 
@@ -145,7 +149,9 @@ describe("POST /comments — as_staff needs a session", () => {
 			.run(ipHash);
 		const res = await anonPost({ as_staff: true, turnstile_token: "x" });
 		expect(res.status).toBe(403);
-		expect(await res.json()).toEqual({ error: "forbidden" });
+		expect(await res.json()).toEqual({
+			error: "Only signed-in staff can mark a comment as staff.",
+		});
 		expect(count()).toBe(0);
 	});
 
@@ -153,7 +159,7 @@ describe("POST /comments — as_staff needs a session", () => {
 		const res = await post(BANNED_SID, { as_staff: true });
 		expect(res.status).toBe(403);
 		// The ban gate answers first; the staff check never gets a say.
-		expect(await res.json()).not.toEqual({ error: "forbidden" });
+		expect(await res.json()).toEqual({ error: "Your account is banned." });
 		expect(count()).toBe(0);
 	});
 });

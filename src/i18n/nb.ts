@@ -52,6 +52,8 @@ export const nb = {
 	"err.delete.not_author": "Du kan bare slette egne kommentarer.",
 	"err.not_found": "Ikke funnet.",
 	"err.banned": "Kontoen din er utestengt.",
+	"err.staff.forbidden":
+		"Bare innlogget personale kan merke en kommentar som fra personalet.",
 	"err.thread_closed": "Kommentarfeltet er stengt for dette innlegget.",
 	"err.internal": "Noe gikk galt. Prøv igjen.",
 

@@ -21,6 +21,7 @@ export const en = {
 	"err.delete.not_author": "You can only delete your own comments.",
 	"err.not_found": "Not found.",
 	"err.banned": "Your account is banned.",
+	"err.staff.forbidden": "Only signed-in staff can mark a comment as staff.",
 	"err.thread_closed": "Comments are closed on this post.",
 	"err.internal": "Something went wrong. Try again.",
 

@@ -54,6 +54,8 @@ export const ja = {
 	"err.delete.not_author": "削除できるのは自分のコメントだけです。",
 	"err.not_found": "見つかりません。",
 	"err.banned": "このアカウントは利用を停止されています。",
+	"err.staff.forbidden":
+		"スタッフとしてサインインしている場合のみ、コメントにスタッフの印を付けられます。",
 	"err.thread_closed": "この投稿へのコメントは締め切られています。",
 	"err.internal": "問題が発生しました。もう一度お試しください。",
 

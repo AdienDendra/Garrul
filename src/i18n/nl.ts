@@ -48,6 +48,8 @@ export const nl = {
 	"err.delete.not_author": "Alleen eigen reacties kunnen worden verwijderd.",
 	"err.not_found": "Niet gevonden.",
 	"err.banned": "Dit account is geblokkeerd.",
+	"err.staff.forbidden":
+		"Alleen ingelogde medewerkers kunnen een reactie als medewerker markeren.",
 	"err.thread_closed": "Reacties zijn gesloten voor dit bericht.",
 	"err.internal": "Er is iets misgegaan. Probeer het opnieuw.",
 

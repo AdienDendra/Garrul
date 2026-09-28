@@ -475,7 +475,7 @@ comments.post("/", async (c) => {
 	// IP hash alone, so if one were ever promoted, every anonymous poster behind
 	// that address would inherit its role.
 	const asStaff = body.as_staff === true;
-	if (asStaff && !session) return c.json({ error: "forbidden" }, 403);
+	if (asStaff && !session) return c.json({ error: t("err.staff.forbidden") }, 403);
 
 	// Anonymous path: name + Turnstile required on top of the rate limit.
 	let author: User;
@@ -622,7 +622,7 @@ comments.post("/", async (c) => {
 	// The staff marker is a claim about the author, so it is checked against
 	// the resolved author row and never trusted from the body.
 	if (asStaff && author.role !== "mod" && author.role !== "admin") {
-		return c.json({ error: "forbidden" }, 403);
+		return c.json({ error: t("err.staff.forbidden") }, 403);
 	}
 
 	// Validate the supplied post_url: http(s) and on an ALLOWED_ORIGINS origin,

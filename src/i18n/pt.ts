@@ -57,6 +57,8 @@ export const pt = {
 	"err.delete.not_author": "Só é possível apagar os próprios comentários.",
 	"err.not_found": "Não encontrado.",
 	"err.banned": "Esta conta está banida.",
+	"err.staff.forbidden":
+		"Apenas equipe com sessão iniciada pode marcar um comentário como da equipe.",
 	"err.thread_closed": "Os comentários estão fechados nesta publicação.",
 	// Brazilian "deu errado", not European "correu mal".
 	"err.internal": "Algo deu errado. Tente novamente.",

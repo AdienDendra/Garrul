@@ -36,6 +36,8 @@ export const fr = {
 	"err.delete.not_author": "Vous ne pouvez supprimer que vos propres commentaires.",
 	"err.not_found": "Introuvable.",
 	"err.banned": "Votre compte est banni.",
+	"err.staff.forbidden":
+		"Seul le personnel connecté peut marquer un commentaire comme provenant du personnel.",
 	"err.thread_closed": "Les commentaires sont fermés pour cet article.",
 	"err.internal": "Une erreur s'est produite. Réessayez.",
 

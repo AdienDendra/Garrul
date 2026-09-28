@@ -1378,7 +1378,7 @@ export const countPageReactionsBySlugs = async (
  * Admin: page through comments by status, newest first. Cursor is the
  * created_at,id pair of the last row from the previous page.
  */
-export type AdminComment = Comment & {
+export type AdminComment = Omit<Comment, "as_staff"> & {
 	author_name: string | null;
 	author_email: string | null;
 	author_avatar_url: string | null;
@@ -1391,6 +1391,10 @@ export type AdminComment = Comment & {
 	// them, to link a row back to the page it was posted on.
 	post_url?: string | null;
 	post_title?: string | null;
+	// Optional for the same reason: only adminGetCommentDetail's top-level
+	// `comment` query selects it — the parent/replies/ip_siblings/user_recent
+	// side-queries on the same page don't.
+	as_staff?: number;
 };
 
 type AdminCommentRow = Omit<

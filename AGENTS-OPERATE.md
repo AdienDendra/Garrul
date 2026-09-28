@@ -990,7 +990,7 @@ Pages (top nav):
 | `/admin/users/:id` | User detail: all their comments paginated, reactions received, audit history affecting them, the **Moderator notes** card, Ban/Unban, role controls, and two folded-away admin-only panels — **Export personal data** and **Erase personal data** (both below). |
 | `/admin/audit` | Audit log with filter form (admin, action, target kind/id, date range). |
 | `/admin/subscriptions` | Email subscription list. Filter by email/post/confirmed/unsubscribed. Actions: manual unsubscribe, resend confirmation. |
-| `/admin/operator` | Batch operations: rerender stale comments (POSTs `/admin/api/ops/rerender` in 50-row chunks until done), seed-demo (idempotent; gated to `ENV != "production"`), the comment import upload (Disqus XML, a Remark42 backup, a Comentario/Commento JSON export, or the JSON `npm run dump-isso` / `npm run dump-cusdis` produces from an isso `comments.db` or a Cusdis `db.sqlite` — gzipped or not — see below), and two retention cards — IP-hash and audit-log — each showing how many rows are past the configured window and offering a manual drain. |
+| `/admin/operator` | Batch operations: rerender stale comments (POSTs `/admin/api/ops/rerender` in 50-row chunks until done), seed-demo (idempotent; gated to `ENV != "production"`), the comment import upload (Disqus XML, a Remark42 backup, a Comentario/Commento JSON export, or the JSON `npm run dump-isso` / `npm run dump-cusdis` produces from an isso `comments.db` or a Cusdis `db.sqlite` — gzipped or not — see below), and two retention cards — IP-hash and audit-log — each showing how many rows are past the configured window and offering a manual drain, and **Export site data** (JSON/CSV download links — see §11). |
 | `/admin/settings` | Editable form for feature flags, display/pagination numbers, and the moderation dials (edit window, thread auto-close, community auto-collapse, the three anti-spam heuristics), saved to the `settings` D1 table (no redeploy — see section 5). Also renders a read-only `(set)`/`(unset)` summary of deploy-time config (Turnstile, email, OAuth, spam provider), which still changes via `wrangler secret put` / `wrangler.toml`. |
 | `/admin/webhooks` | Outbound webhook endpoints: add/pause/delete, per-endpoint secret + event filter, adapter (`generic` / `slack` / `discord` / `telegram`), failure counts and retry status. |
 | `/admin/telegram` | **Admin-only.** Telegram operator bot: shows whether the bot token/webhook secret are set, links your personal Telegram account (one-time code or deep link), toggles the daily digest, and unlinks. See `docs/telegram.md`. |
@@ -1029,6 +1029,8 @@ One admin read is listed here too, because of what it returns:
 
 - `GET /admin/api/users/:id/export` — the whole of one person's personal data as
   JSON (admin-only). See below.
+- `GET /admin/api/export?format=json|csv` — the whole comment layer as a
+  streamed download (admin-only). See §11 "Site-wide export".
 
 **Exporting a user's personal data.** `/admin/users/<id>` → **Export
 personal data** → *Download JSON*, or `GET /admin/api/users/:id/export`
@@ -1754,6 +1756,43 @@ shipped.
 
 Full posture, including what rotation breaks and what a deletion request
 costs today: [`docs/ip-hashing.md`](docs/ip-hashing.md).
+
+### Site-wide export (JSON / CSV)
+
+`/admin/operator` → **Export site data**, or
+`GET /admin/api/export?format=json|csv` (admin-only; a moderator gets 403,
+a cross-site request gets 403). The response streams, is `no-store`, and
+saves as `garrul-export-<YYYY-MM-DD>.json` / `.csv`.
+
+- **JSON** is a portable backup:
+  `{"site_export_version":1,"exported_at":"<ISO>","tables":{…}}` with
+  `posts`, `comments`, `users`, `votes`, `reactions`, `page_votes`,
+  `page_reactions`, `subscriptions`. Timestamps are epoch ms, as stored.
+  Comments of **every** status (approved, pending, spam, deleted) are
+  included — a moderation decision is data.
+- **CSV** is comments only, for a spreadsheet: `id, post_slug, parent_id,
+  author_name, status, created_at (ISO), score (up − down), body_md`.
+  RFC 4180, every field quoted, CRLF. A text cell starting with `=`, `+`,
+  `-`, `@`, tab or CR gets a leading `'` so a spreadsheet can't run it as
+  a formula — which also means a markdown list line reads `'- item`. Use
+  the JSON when you need the text exactly.
+
+Columns are an explicit allowlist, so a column added by a future
+migration stays out until it is listed. **Never included:**
+`comments.ip_hash`, `comments.user_agent`, `comments.body_html` (rerender
+from `body_md`), subscription `token` / `confirm_token`, unconfirmed
+subscriptions, and `users.provider_id` for anonymous ghosts (it is the
+hashed IP). Whole tables left out: sessions, audit log, spam verdicts,
+reports, settings, webhooks, Telegram links, saved replies, moderator
+notes. **User emails are included** — the file is personal data for
+every commenter; store it like a `.sql` dump.
+
+Two operating notes. It reads every row of eight tables in 500-row pages,
+so on the D1 free tier one export spends a visible share of the daily read
+quota. And pages are separate reads, so the file is not a point-in-time
+snapshot; for that, use `npm run db:export`. Each download writes a
+`site.export` audit row with `{format, counts, complete}` — row counts
+only; `complete: false` means the download was cancelled or failed partway.
 
 ### Exporting one person rather than the database
 

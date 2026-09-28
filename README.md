@@ -144,8 +144,10 @@ an AI assistant at your instance:
 - **Metrics**: Workers Analytics Engine writes `comment.posted`,
   `oauth.complete`, `ratelimit.hit` and friends; read them in the
   Cloudflare dashboard under your Worker.
-- **Backups**: `npm run db:export` writes a `.sql` dump for your local
-  archive. Cloudflare keeps point-in-time backups of D1 as well.
+- **Backups**: `npm run db:export` writes a `.sql` dump for your local archive.
+  Cloudflare keeps point-in-time backups of D1 as well.
+  `/admin/operator` → **Export site data** downloads a portable JSON backup
+  or a comments CSV.
 - **Re-render**: bumped the markdown sanitizer? `npm run rerender`
   rewrites stored comment HTML in place.
 

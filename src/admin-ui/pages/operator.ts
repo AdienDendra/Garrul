@@ -194,7 +194,9 @@ const exportCard = `
     would run as a formula get a leading <code>'</code>. Hashed IPs, user
     agents and subscription tokens are never included; user emails are.</p>
   <p class="muted">One export reads every row, which counts against the D1
-    free-tier daily read quota. Each download is recorded in the audit log.</p>
+    free-tier daily read quota. Each download is recorded in the audit log.
+    A site past roughly 20,000 rows is refused — one Worker request can't
+    page that far — so use <code>npm run db:export</code> instead.</p>
   <p><a href="/admin/api/export?format=json">Download JSON</a> ·
     <a href="/admin/api/export?format=csv">Download CSV</a></p>
 </div>`;

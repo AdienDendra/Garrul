@@ -92,6 +92,22 @@ describe("GET /admin/api/export", () => {
 		expect(await res.json()).toEqual({ error: "invalid_format" });
 	});
 
+	it.each(["json", "csv"])(
+		"%s: refuses up front when paging would exceed the D1 query budget",
+		async (format) => {
+			const { sqlite, request } = adminHarness();
+			seedOne(sqlite);
+			// The estimate reads MAX(rowid), so one high rowid stands in for
+			// ~25k comments: 51 pages on its own, past the 50-per-invocation cap.
+			sqlite.prepare("UPDATE comments SET rowid = 25000").run();
+			const res = await request(`/admin/api/export?format=${format}`);
+			expect(res.status).toBe(413);
+			expect(await res.json()).toMatchObject({ error: "export_too_large" });
+			expect(res.headers.get("content-disposition")).toBeNull();
+			expect(auditRows(sqlite)).toHaveLength(0);
+		},
+	);
+
 	it("is admin-only: a mod gets 403 and nothing is audited", async () => {
 		const { sqlite, request } = adminHarness();
 		const res = await request("/admin/api/export", { sid: MOD_SID });

@@ -103,7 +103,9 @@ import {
 	resolveReports,
 } from "../lib/moderation";
 import {
+	EXPORT_QUERY_BUDGET,
 	type ExportCounts,
+	exportQueryCost,
 	exportStream,
 	siteExportCsv,
 	siteExportJson,
@@ -2210,6 +2212,19 @@ admin.get("/api/export", async (c) => {
 	const format = c.req.query("format") ?? "json";
 	if (format !== "json" && format !== "csv") {
 		return c.json({ error: "invalid_format" }, 400);
+	}
+	// Refused before any byte streams — see EXPORT_QUERY_BUDGET.
+	const queries = await exportQueryCost(c.env.DB, format);
+	if (queries > EXPORT_QUERY_BUDGET) {
+		return c.json(
+			{
+				error: "export_too_large",
+				queries,
+				budget: EXPORT_QUERY_BUDGET,
+				hint: "Too large to export in one Worker request; run `npm run db:export` instead.",
+			},
+			413,
+		);
 	}
 
 	const counts: ExportCounts = {};

@@ -12,6 +12,7 @@ import {
 	type ExportCounts,
 	csvCell,
 	csvRow,
+	exportQueryCost,
 	exportStream,
 	siteExportCsv,
 	siteExportJson,
@@ -159,6 +160,25 @@ describe("siteExportJson", () => {
 		expect(doc.tables.votes).toHaveLength(1);
 		expect(doc.tables.reactions).toHaveLength(1);
 		expect(counts).toMatchObject({ posts: 1, votes: 1, subscriptions: 1 });
+	});
+});
+
+describe("exportQueryCost", () => {
+	// The route refuses an export against this estimate, so it must never
+	// undercount what the pager really issues.
+	it.each(["json", "csv"] as const)("%s: matches the pager's real query count", async (format) => {
+		const { env } = seed(EXPORT_PAGE_SIZE * 2 + 201);
+		let issued = 0;
+		const db = {
+			prepare(sql: string) {
+				issued++;
+				return env.DB.prepare(sql);
+			},
+		} as unknown as D1Database;
+		const cost = await exportQueryCost(env.DB, format);
+		await drain(format === "json" ? siteExportJson(db, {}) : siteExportCsv(db, {}));
+		expect(cost).toBe(issued);
+		expect(cost).toBe(format === "json" ? 3 + 7 : 3);
 	});
 });
 

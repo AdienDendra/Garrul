@@ -81,6 +81,42 @@ const JSON_TABLES: ReadonlyArray<readonly [string, string]> = [
 	],
 ];
 
+/**
+ * D1 allows 50 queries per Worker invocation on the Free plan (1,000 on Paid)
+ * and every page above is one, so paging bounds memory but not queries. A
+ * Worker can't see its plan, so the export sizes itself for Free: the route
+ * refuses up front rather than stream a file that dies at query 51 with a
+ * truncated body and no budget left for its audit row. The margin covers the
+ * request's other queries — admin user lookup, settings, this preflight and
+ * the closing audit insert. Past it, `npm run db:export` has no such cap.
+ */
+export const EXPORT_QUERY_BUDGET = 50 - 6;
+
+/**
+ * Page queries an export of `format` will issue: a table of n rows costs
+ * floor(n / page) + 1, the last one being the short (or empty) page that stops
+ * the pager. `MAX(rowid)` stands in for n — an upper bound, since deletes only
+ * leave gaps, and an index seek where COUNT(*) would read the whole table
+ * against the daily row-read quota. One query for every table.
+ */
+export const exportQueryCost = async (
+	db: D1Database,
+	format: "json" | "csv",
+): Promise<number> => {
+	const names = format === "csv" ? ["comments"] : JSON_TABLES.map(([n]) => n);
+	const row = await db
+		.prepare(
+			`SELECT ${names
+				.map((n) => `(SELECT COALESCE(MAX(rowid), 0) FROM ${n}) AS ${n}`)
+				.join(", ")}`,
+		)
+		.first<Record<string, number>>();
+	return names.reduce(
+		(sum, n) => sum + Math.floor((row?.[n] ?? 0) / EXPORT_PAGE_SIZE) + 1,
+		0,
+	);
+};
+
 export const CSV_COLUMNS = [
 	"id",
 	"post_slug",

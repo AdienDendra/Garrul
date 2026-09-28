@@ -1798,6 +1798,14 @@ snapshot; for that, use `npm run db:export`. Each download writes a
 `site.export` audit row with `{format, counts, complete}` — row counts
 only; `complete: false` means the download was cancelled or failed partway.
 
+**Size ceiling.** Each 500-row page is one D1 query, and D1 allows 50
+queries per Worker invocation on the Free plan (1,000 on Paid). The Worker
+can't see its plan, so before streaming it estimates the page count from
+each table's `MAX(rowid)` and answers `413 {"error":"export_too_large",
+"queries":N,"budget":44}` when the export would not fit — roughly 20,000
+rows across the eight tables (CSV counts comments only). No audit row is
+written for a refusal. Past the ceiling, use `npm run db:export`.
+
 ### Exporting one person rather than the database
 
 For a data-subject access or portability request, don't hand over a `.sql`

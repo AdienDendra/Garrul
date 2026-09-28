@@ -135,11 +135,11 @@ import {
 	FLAG_KEYS,
 	loadNumbers,
 	loadSettings,
-	MAX_TEXT_SETTING_CHARS,
 	NUMBER_KEYS,
 	numberBounds,
 	STRING_KEYS,
 	stringOptions,
+	textMax,
 	TEXT_KEYS,
 } from "../lib/settings";
 import { bustTreeCache } from "../lib/tree-cache";
@@ -998,7 +998,7 @@ admin.post("/settings", async (c) => {
 				return c.json({ error: `invalid_text:${key}` }, 400);
 			}
 			const value = raw.trim();
-			if (value.length > MAX_TEXT_SETTING_CHARS) {
+			if (value.length > textMax(key)) {
 				return c.json({ error: `text_too_long:${key}` }, 400);
 			}
 			// An empty box means an empty list, not "inherit the env default" —

@@ -100,7 +100,7 @@ export const buildConfigPayload = (
 	resolved: ResolvedSettings,
 	locale: string,
 ): Record<string, unknown> => {
-	const { flags, numbers } = resolved;
+	const { flags, numbers, texts } = resolved;
 	// Provider client-id/secret env-var names are typed as plain strings on
 	// ProviderConfig, so index the bindings through a string-keyed view.
 	const envRecord = env as unknown as Record<string, string | undefined>;
@@ -166,6 +166,10 @@ export const buildConfigPayload = (
 		// tunable — it is a constant in lib/markdown.ts, shipped here only so the
 		// composer and the validator can never disagree about it.
 		max_body_chars: MAX_BODY_CHARS,
+		// Operator's badge wording, already trimmed and capped by the resolver.
+		// null (not "") when unset, same as turnstile_site_key: the widget then
+		// uses its own locale string.
+		staff_badge_label: texts.staff_badge_label || null,
 		comments_per_page: numbers.comments_per_page,
 		replies_per_thread: numbers.replies_per_thread,
 		auto_collapse_depth: numbers.auto_collapse_depth,

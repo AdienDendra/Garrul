@@ -9,6 +9,7 @@ import {
 	type ResolvedStrings,
 	type ResolvedTexts,
 	MAX_TEXT_SETTING_CHARS,
+	STAFF_BADGE_LABEL_MAX,
 	TEXT_KEYS,
 	numberBounds,
 } from "../../lib/settings";
@@ -393,6 +394,18 @@ export const renderSettings = (
 		placeholder: "security@example.com",
 	});
 
+	const staffLabelTextarea = renderTextarea({
+		name: "staff_badge_label",
+		model: "texts.staff_badge_label",
+		label: "Staff badge label",
+		help: `Shown next to a moderator's name on comments they chose to post as
+		staff. Empty (the default) uses the reader's language — "Staff" in
+		English. Up to ${STAFF_BADGE_LABEL_MAX} characters.`,
+		rows: 1,
+		maxlength: STAFF_BADGE_LABEL_MAX,
+		placeholder: "Staff",
+	});
+
 	const initial = JSON.stringify(
 		Object.fromEntries(ALL_FLAG_META.map((f) => [f.key, flags[f.key]])),
 	);
@@ -531,6 +544,7 @@ export const renderSettings = (
       <input type="hidden" name="auto_close_at" x-model.number="nums.auto_close_at"
              min="${numberBounds("auto_close_at").min}"
              max="${numberBounds("auto_close_at").max}">
+      ${staffLabelTextarea}
     </div>
 
     <div class="card" x-show="tab === 'moderation'" x-cloak>

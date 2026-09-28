@@ -20,12 +20,14 @@ import {
 	loadNumbers,
 	loadSettings,
 	loadStrings,
+	loadTexts,
 	bustSettingsCache,
 	parseIntSetting,
 	parseStringSetting,
 	FLAG_KEYS,
 	NUMBER_KEYS,
 	STRING_KEYS,
+	STAFF_BADGE_LABEL_MAX,
 	numberBounds,
 	stringOptions,
 	type FlagKey,
@@ -33,6 +35,7 @@ import {
 } from "../src/lib/settings";
 import { reactions } from "../src/routes/api.reactions";
 import { comments } from "../src/routes/api.comments";
+import { buildConfigPayload } from "../src/routes/api.config";
 import type { Bindings } from "../src/index";
 
 // In-memory KV double for TREE_CACHE. Tracks delete calls so a test can prove
@@ -859,5 +862,25 @@ describe("loadStrings", () => {
 		await bustSettingsCache(env);
 		await loadStrings(env);
 		expect(db.reads()).toBe(2);
+	});
+});
+
+describe("staff_badge_label", () => {
+	it("defaults to empty and emits null in the config payload", async () => {
+		const { env } = mkEnv();
+		expect((await loadTexts(env)).staff_badge_label).toBe("");
+		const cfg = buildConfigPayload(env, await loadSettings(mkEnv().env), "en");
+		expect(cfg.staff_badge_label).toBeNull();
+	});
+
+	it("emits the trimmed operator label", async () => {
+		const { env } = mkEnv({ staff_badge_label: "  Team  " });
+		const cfg = buildConfigPayload(env, await loadSettings(env), "en");
+		expect(cfg.staff_badge_label).toBe("Team");
+	});
+
+	it("truncates an over-long stored value to its own cap, not the global one", async () => {
+		const { env } = mkEnv({ staff_badge_label: "x".repeat(STAFF_BADGE_LABEL_MAX + 10) });
+		expect((await loadTexts(env)).staff_badge_label).toHaveLength(STAFF_BADGE_LABEL_MAX);
 	});
 });

@@ -62,7 +62,10 @@ export type StringSettingKey = "default_locale" | "default_sort";
 
 export type ResolvedStrings = Record<StringSettingKey, string>;
 
-export type TextSettingKey = "spam_blocklist" | "security_contact";
+export type TextSettingKey =
+	| "spam_blocklist"
+	| "security_contact"
+	| "staff_badge_label";
 
 export type ResolvedTexts = Record<TextSettingKey, string>;
 
@@ -360,6 +363,9 @@ export const STRING_KEYS = Object.keys(STRINGS) as StringSettingKey[];
  */
 export const MAX_TEXT_SETTING_CHARS = 20_000;
 
+/** Cap on the staff badge label: it sits inline next to a commenter's name. */
+export const STAFF_BADGE_LABEL_MAX = 32;
+
 // Free-form text settings. Same precedence chain as everything above
 // (DB > env > default), but neither clamped nor whitelisted — see
 // MAX_TEXT_SETTING_CHARS for why boundedness is the invariant instead.
@@ -369,7 +375,14 @@ export const MAX_TEXT_SETTING_CHARS = 20_000;
 // grammar would then need a cache-shape migration to take effect; a raw string
 // re-parsed downstream costs microseconds and can never go stale against the
 // code that reads it.
-const TEXTS: Record<TextSettingKey, { env: keyof Bindings; default: string }> = {
+//
+// `env` is optional and `max` overrides the global MAX_TEXT_SETTING_CHARS cap
+// per key — added for staff_badge_label, which is DB-only (no env var) and
+// far shorter than a muted-words list.
+const TEXTS: Record<
+	TextSettingKey,
+	{ env?: keyof Bindings; default: string; max?: number }
+> = {
 	// Operator-maintained muted-words list, one term per line. Empty by default:
 	// this is a moderation policy, and an upgrade must never start holding
 	// comments against a list the operator didn't write.
@@ -379,9 +392,19 @@ const TEXTS: Record<TextSettingKey, { env: keyof Bindings; default: string }> = 
 	// 404 until the operator opts in, because a Contact field is the one thing
 	// the RFC makes mandatory and inventing one would point researchers nowhere.
 	security_contact: { env: "SECURITY_CONTACT", default: "" },
+	// Operator wording for the widget's staff badge. Empty (the default) means
+	// "use the reader's locale string", so the badge stays translated until an
+	// operator deliberately picks one word for everyone. No env var: this is
+	// presentation, set from the Settings page, and a deploy-time default would
+	// cost an env name across every install doc for no operator benefit.
+	staff_badge_label: { default: "", max: STAFF_BADGE_LABEL_MAX },
 };
 
 export const TEXT_KEYS = Object.keys(TEXTS) as TextSettingKey[];
+
+/** Per-key length cap for a text setting (save path rejects, resolver truncates). */
+export const textMax = (key: TextSettingKey): number =>
+	TEXTS[key].max ?? MAX_TEXT_SETTING_CHARS;
 
 /** The accepted values for a string setting (used by the admin UI + save path). */
 export const stringOptions = (key: StringSettingKey): string[] =>
@@ -487,13 +510,12 @@ export const parseStringSetting = (
 export const parseTextSetting = (
 	raw: string | undefined,
 	fallback: string,
+	max = MAX_TEXT_SETTING_CHARS,
 ): string => {
 	if (raw == null) return fallback;
 	const v = raw.trim();
 	if (v === "") return fallback;
-	return v.length > MAX_TEXT_SETTING_CHARS
-		? v.slice(0, MAX_TEXT_SETTING_CHARS)
-		: v;
+	return v.length > max ? v.slice(0, max) : v;
 };
 
 const resolveTexts = (
@@ -506,8 +528,10 @@ const resolveTexts = (
 		const raw =
 			key in dbSettings
 				? dbSettings[key]
-				: (env[spec.env] as string | undefined);
-		out[key] = parseTextSetting(raw, spec.default);
+				: spec.env
+					? (env[spec.env] as string | undefined)
+					: undefined;
+		out[key] = parseTextSetting(raw, spec.default, textMax(key));
 	}
 	return out;
 };

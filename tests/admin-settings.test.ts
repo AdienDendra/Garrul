@@ -27,7 +27,7 @@
 import { describe, it, expect } from "vitest";
 import { Hono } from "hono";
 import { admin } from "../src/routes/admin";
-import { MAX_TEXT_SETTING_CHARS } from "../src/lib/settings";
+import { MAX_TEXT_SETTING_CHARS, STAFF_BADGE_LABEL_MAX } from "../src/lib/settings";
 import type { Bindings } from "../src/index";
 
 // Real session ids are 64 lowercase hex chars (see newSessionId); readSession
@@ -395,6 +395,24 @@ describe("POST /admin/settings — text writes", () => {
 		});
 		expect(res.status).toBe(200);
 		expect(settingWrites(runs).map(([k]) => k)).toEqual(["spam_blocklist"]);
+	});
+
+	it("caps staff_badge_label at its own limit", async () => {
+		const { env, runs } = mkEnv();
+		const over = await postSettings(env, {
+			texts: { staff_badge_label: "x".repeat(STAFF_BADGE_LABEL_MAX + 1) },
+		});
+		expect(over.status).toBe(400);
+		expect(await over.json()).toEqual({ error: "text_too_long:staff_badge_label" });
+		expect(settingWrites(runs)).toEqual([]);
+		const at = await postSettings(env, {
+			texts: { staff_badge_label: ` ${"x".repeat(STAFF_BADGE_LABEL_MAX)} ` },
+		});
+		expect(at.status).toBe(200);
+		expect(settingWrites(runs)).toContainEqual([
+			"staff_badge_label",
+			"x".repeat(STAFF_BADGE_LABEL_MAX),
+		]);
 	});
 
 	// The audit log answers "who changed what, when" — it is not a revision

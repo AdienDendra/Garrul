@@ -1605,6 +1605,11 @@ nowhere. `Expires` is generated ~6 months out on every response, so the
 file never goes stale on its own. Like `/AGENTS.md`, the route is public
 and needs no `Origin`.
 
+**Staff badge label.** Admin → Settings → Moderation → *Staff badge label* (≤ 32
+characters, DB-only, no env var). It replaces the badge text on comments a
+moderator posted as staff. Empty uses each reader's locale string. The widget
+receives it as `staff_badge_label` in `/api/v1/config` (null when unset).
+
 ### Mount cost and free-tier headroom (since v2.15.0)
 
 The Workers free tier allows **100,000 requests/day**, and what a

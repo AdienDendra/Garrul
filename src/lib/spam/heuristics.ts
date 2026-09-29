@@ -82,8 +82,9 @@ export const countLinks = (bodyMd: string): number => {
 };
 
 /**
- * True when this is the author's first-ever comment (no prior rows in D1
- * keyed on user_id). Caller gates on the resolved
+ * True when the author has no approved comment yet. Only `approved` rows
+ * count: a still-pending first comment must not vouch for the second, or a
+ * held spammer just posts again and goes live. Caller gates on the resolved
  * `spam_first_comment_moderate` setting (or an enabled classifier, which uses
  * this as a feature) before paying the query.
  */
@@ -92,7 +93,7 @@ export const isFirstComment = async (
 	userId: string,
 ): Promise<boolean> => {
 	const row = await db
-		.prepare(`SELECT 1 AS one FROM comments WHERE user_id = ? LIMIT 1`)
+		.prepare(`SELECT 1 AS one FROM comments WHERE user_id = ? AND status = 'approved' LIMIT 1`)
 		.bind(userId)
 		.first<{ one: number } | null>();
 	return row == null;

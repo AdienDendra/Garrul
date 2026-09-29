@@ -622,7 +622,7 @@ export const CONFIG_REGISTRY: ConfigEntry[] = [
 		adminEditable: true,
 		hint: "first comment from a new author goes to the queue",
 		description:
-			"Optional. Route the first comment from any new author to `pending`. Unset = off.",
+			"Optional. Route a new author's comments to `pending` until one is approved. Unset = off.",
 		example: "true",
 		addedIn: "1.1.1",
 	},

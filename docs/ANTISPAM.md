@@ -103,7 +103,7 @@ Strong signal against link-farm spam. Some legit comments (e.g. linking 4-5 pape
 
 ### 3. First-comment moderation (`SPAM_FIRST_COMMENT_MODERATE`)
 
-Every new commenter's first-ever comment goes to `pending` until you approve once. Subsequent comments from the same author (same hashed IP for anonymous, same OAuth identity for signed-in users) post normally. Admins skip this check.
+Every comment from a new author goes to `pending` until you approve one of them. After that, the same author (same hashed IP for anonymous, same OAuth identity for signed-in users) posts normally. Only an approved comment counts: posting again while the first still waits in the queue is held too, and a comment you marked spam or deleted does not count. Admins skip this check.
 
 ```toml
 SPAM_FIRST_COMMENT_MODERATE = "true"

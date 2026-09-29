@@ -65,7 +65,15 @@ describe("renderMarkdown — output safety", () => {
 		expect(renderMarkdown("a &amp; b")).toContain("a &amp; b");
 		expect(renderMarkdown("1 < 2")).toContain("1 &lt; 2");
 		expect(renderMarkdown("\\<not a tag>")).toContain("&lt;not a tag&gt;");
-		expect(renderMarkdown("&copy; &#169; &#xA9;")).toContain("&copy; &#169; &#xA9;");
+		// marked >= 18.0.14 decodes numeric entities (`&#169;` → `©`); either
+		// spelling renders the same, and neither may come back double-escaped.
+		const entities = renderMarkdown("&copy; &#169; &#xA9;");
+		expect(entities).toMatch(/&copy; (©|&#169;) (©|&#xA9;)/);
+		expect(entities).not.toContain("&amp;");
+		// A decoded numeric `<` must be re-escaped, never emitted as markup.
+		expect(renderMarkdown("&#60;script&#62;x&#x3c;/script&#x3e;")).toContain(
+			"&lt;script&gt;x&lt;/script&gt;",
+		);
 		expect(renderMarkdown("`a < b`")).toContain("<code>a &lt; b</code>");
 	});
 

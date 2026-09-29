@@ -193,6 +193,19 @@ describe("PATCH /comments/:id — spam re-evaluation", () => {
 		expect(statusOf(id)).toBe("approved");
 	});
 
+	it("keeps an approved comment approved under the first-comment hold", async () => {
+		// The comment being edited is the author's approved history, so the hold
+		// (which counts only approved rows) must not send it back to the queue.
+		env = {
+			...baseEnv(),
+			SPAM_LINK_THRESHOLD: "-1",
+			SPAM_FIRST_COMMENT_MODERATE: "true",
+		} as unknown as Bindings;
+		const id = seed();
+		expect((await patch(id, "a small correction")).status).toBe(200);
+		expect(statusOf(id)).toBe("approved");
+	});
+
 	it("cannot promote a pending comment to approved", async () => {
 		// The laundering case in reverse: a quarantined comment edited into
 		// something benign still needs a moderator.

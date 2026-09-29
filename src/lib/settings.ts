@@ -96,7 +96,7 @@ const FLAGS: Record<FlagKey, { env: keyof Bindings; default: boolean }> = {
 		env: "SHOW_DELETED_PLACEHOLDERS",
 		default: false,
 	},
-	// Route the first-ever comment from any author to `pending`. A moderation
+	// Route every comment to `pending` until the author has one approved. A moderation
 	// dial an operator wants to flip while watching the queue, so it resolves
 	// here rather than requiring a redeploy. Note the env var was historically
 	// matched with `=== "true"`; parseBool is laxer (any non-falsy string is

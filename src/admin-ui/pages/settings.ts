@@ -129,7 +129,7 @@ const MOD_FLAG_META: { key: FlagKey; label: string; help: string }[] = [
 	{
 		key: "spam_first_comment_moderate",
 		label: "Hold every author's first comment",
-		help: "Route the first-ever comment from each author to the moderation queue. Nothing is dropped — you approve or reject it.",
+		help: "Route each author's comments to the moderation queue until you approve one of them. Nothing is dropped — you approve or reject it.",
 	},
 	{
 		key: "turnstile_always",

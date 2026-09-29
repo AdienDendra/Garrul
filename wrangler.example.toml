@@ -169,7 +169,7 @@ OAUTH_CALLBACK_BASE = "https://comments.example.com"
 # comment to status='pending' (admin queue) — never a silent drop.
 # SPAM_LINK_THRESHOLD = "3"            # flag if > N URLs in body
 # SPAM_HONEYPOT_MIN_MS = "1500"        # flag if form submitted faster than N ms
-# SPAM_FIRST_COMMENT_MODERATE = "true" # first comment from a new author → pending
+# SPAM_FIRST_COMMENT_MODERATE = "true" # new author → pending until one approved
 #
 # Muted words, one term per line. This is only the default a fresh deploy
 # starts with — the list is normally maintained on /admin/settings, and a

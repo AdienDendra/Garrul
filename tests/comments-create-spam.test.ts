@@ -145,6 +145,24 @@ describe("POST /comments — anti-spam on create", () => {
 		expect(aiCalls).toBe(0);
 	});
 
+	it("keeps holding an author until one of their comments is approved", async () => {
+		const extra = { SPAM_FIRST_COMMENT_MODERATE: "true" };
+		await post({ body: "first" }, extra);
+		await post({ body: "second, while the first still waits" }, extra);
+		expect(stored().map((c) => c.status)).toEqual(["pending", "pending"]);
+
+		sqlite.prepare("UPDATE comments SET status = 'spam' WHERE id = ?").run(stored()[0]!.id);
+		await post({ body: "third, after a rejection" }, extra);
+		expect(stored().map((c) => c.status)).toEqual(["spam", "pending", "pending"]);
+
+		sqlite.prepare("UPDATE comments SET status = 'approved' WHERE id = ?").run(stored()[1]!.id);
+		// Fresh caches: the fourth post would otherwise trip the per-user rate limit.
+		uninstallMockCaches();
+		installMockCaches();
+		await post({ body: "fourth, after an approval" }, extra);
+		expect(stored().map((c) => c.status)).toEqual(["spam", "approved", "pending", "approved"]);
+	});
+
 	it("refuses a filled honeypot and an oversized body without writing", async () => {
 		expect((await post({ body: "hi", website: "https://bot.example" })).status).toBe(400);
 		expect((await post({ body: "x".repeat(100_000) })).status).toBe(400);

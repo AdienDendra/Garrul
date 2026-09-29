@@ -231,7 +231,7 @@ between the two is a build error, not a silent misclassification.
 | `SPAM_BLOCKLIST` | var | Optional. Muted-words list, one term per line. A term matches whole words only (`ass` does not flag "class"); wrap it in `*` to match anywhere (`*casino*`), or trail one for a prefix (`t.me/*`). Matching is case-insensitive, folds Unicode lookalike forms (fullwidth `ｖｉａｇｒａ` matches `viagra`) and ignores zero-width characters. Accents are *not* stripped and leetspeak is *not* decoded. Lines starting with `#` are comments. Not a regex — `.` and `(` are literal text. Checked against the comment body, author name and page URL; a hit routes the comment to the admin queue, never a silent drop. Usually maintained on the Settings page rather than here — this is the default a fresh deploy starts with. | `casino\n*viagra*\nt.me/*` | `wrangler.toml` default; **Admin → Settings** overrides |
 | `SPAM_LINK_THRESHOLD` | var | Optional. Flag a comment to `pending` when it contains more than N URLs. Unset (or `-1`) = off; `0` flags any comment containing a link. Tripped signals never silently drop a comment — they route it to the admin queue. | `3` | `wrangler.toml` default; **Admin → Settings** overrides |
 | `SPAM_HONEYPOT_MIN_MS` | var | Optional. Flag a comment to `pending` when the form was submitted faster than N milliseconds. Pair with `SPAM_FORM_TS_SECRET` — without it the timestamp is unsigned and the check is skipped. Unset or `0` = off. | `1500` | `wrangler.toml` default; **Admin → Settings** overrides |
-| `SPAM_FIRST_COMMENT_MODERATE` | var | Optional. Route the first comment from any new author to `pending`. Unset = off. | `true` | `wrangler.toml` default; **Admin → Settings** overrides |
+| `SPAM_FIRST_COMMENT_MODERATE` | var | Optional. Route a new author's comments to `pending` until one is approved. Unset = off. | `true` | `wrangler.toml` default; **Admin → Settings** overrides |
 | `CF_ACCOUNT_ID` | var | Optional. Cloudflare account ID; paired with `CF_API_TOKEN` to enable the `/admin/usage` analytics page. | `0123abcd...` | `wrangler.toml` (or `wrangler secret put` — the in-app setup guide uses the secret form; both work) |
 | `CF_API_TOKEN` | secret | Optional. Cloudflare API token for `/admin/usage`. Least-privilege scopes: Account.Analytics:Read, Account.D1:Read, Account.Workers KV Storage:Read. The page renders setup instructions when either value is unset. | `...` | `wrangler secret put` / `.dev.vars` |
 | `GITHUB_TOKEN` | secret | Optional. Raises the GitHub API rate limit for the `/admin/*` "update available" check. Unauthenticated calls allow 60 req/hr per IP and Cloudflare egress IPs are shared across colos. The check only reads public release metadata, so the token needs **no** scopes or permissions: a fine-grained PAT with no repository access, or a classic PAT with every scope unchecked. Do not grant `public_repo` — despite the name it is read **and write** on all your public repos. | `github_pat_...` | `wrangler secret put` / `.dev.vars` |
@@ -538,8 +538,9 @@ its credentials stay deploy-time.
 - `SPAM_LINK_THRESHOLD` — flag comments containing more than `N`
   http(s)/mailto links. `-1`/unset = off; `0` flags any comment with a
   link.
-- `SPAM_FIRST_COMMENT_MODERATE=true` — every commenter's first-ever
-  comment goes to pending until you approve once.
+- `SPAM_FIRST_COMMENT_MODERATE=true` — every comment from a new author
+  goes to pending until you approve one; a still-pending, spam or deleted
+  comment does not count.
 - `SPAM_BLOCKLIST` — muted words, one term per line, checked against the
   body, author name and page URL. Empty/unset = off. A bare term matches
   whole words only; `*` is the sole wildcard (`*casino*`, `t.me/*`) and

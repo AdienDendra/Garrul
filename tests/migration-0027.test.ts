@@ -24,11 +24,12 @@ it("renames email-shaped Google/Facebook names to 'user' and leaves the rest", (
 	add.run("d", "google", "4", "Dee", "d@example.com");
 	add.run("e", "github", "5", "e@example.com", "e@example.com"); // a login, not the fallback
 	add.run("f", "anon", "h", "me@home", null);
+	add.run("g", "facebook", "6", "Jane @ Acme Co. Ltd", "j@example.com"); // a name, not an address
 
 	for (const f of files.filter((f) => f.startsWith("0027"))) db.exec(readFileSync(join(DIR, f), "utf8"));
 
 	const names = Object.fromEntries(
 		(db.prepare("SELECT id, name FROM users ORDER BY id").all() as { id: string; name: string }[]).map((r) => [r.id, r.name]),
 	);
-	expect(names).toEqual({ a: "user", b: "user", c: "user", d: "Dee", e: "e@example.com", f: "me@home" });
+	expect(names).toEqual({ a: "user", b: "user", c: "user", d: "Dee", e: "e@example.com", f: "me@home", g: "Jane @ Acme Co. Ltd" });
 });

@@ -44,7 +44,7 @@ export const pt = {
 		"Este tópico está aninhado em excesso. Responda mais acima no tópico.",
 	"err.name.required": "É necessário um nome de exibição.",
 	"err.name.too_long": "O nome de exibição é muito longo (máximo de {max} caracteres).",
-	"err.name.reserved": "Este nome pertence a um usuário conectado. Escolha outro nome ou entre na sua conta se ele for seu.",
+	"err.name.reserved": "Este nome não está disponível para comentários anônimos. Escolha outro nome ou entre na sua conta.",
 	"err.turnstile.required":
 		"A verificação antispam falhou. Recarregue a página e tente novamente.",
 	"err.turnstile.invalid":

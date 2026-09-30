@@ -137,7 +137,7 @@ describe("POST /comments — name validation", () => {
 });
 
 describe("POST /comments — reserved names", () => {
-	const RESERVED = "This name is taken by a signed-in user. Pick another name, or sign in if it is yours.";
+	const RESERVED = "This name is not available for anonymous comments. Choose another name, or sign in.";
 	const withToken = (name: string) =>
 		post({ slug: SLUG, name, body: "ordinary body", turnstile_token: "tok" });
 	const addOauthUser = (id: string, name: string, status: string | null) => {

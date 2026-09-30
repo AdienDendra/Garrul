@@ -35,7 +35,7 @@ export const nl = {
 		"Deze discussie is te diep genest. Reageer hoger in de discussie.",
 	"err.name.required": "Een weergavenaam is verplicht.",
 	"err.name.too_long": "De weergavenaam is te lang (maximaal {max} tekens).",
-	"err.name.reserved": "Deze naam is van een ingelogde gebruiker. Kies een andere naam, of log in als hij van jou is.",
+	"err.name.reserved": "Deze naam is niet beschikbaar voor anonieme reacties. Kies een andere naam, of log in.",
 	"err.turnstile.required": "Spamcontrole mislukt. Vernieuw de pagina en probeer het opnieuw.",
 	"err.turnstile.invalid": "Spamcontrole mislukt. Vernieuw de pagina en probeer het opnieuw.",
 	"err.ratelimit": "Te veel reacties — rustig aan en probeer het zo nog een keer.",

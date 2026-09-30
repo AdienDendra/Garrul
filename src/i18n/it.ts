@@ -38,7 +38,7 @@ export const it = {
 		"Questa discussione ha troppi livelli di annidamento. Rispondi più in alto nella discussione.",
 	"err.name.required": "È obbligatorio un nome visualizzato.",
 	"err.name.too_long": "Il nome visualizzato è troppo lungo (massimo {max} caratteri).",
-	"err.name.reserved": "Questo nome appartiene a un utente registrato. Scegli un altro nome o accedi se è il tuo.",
+	"err.name.reserved": "Questo nome non è disponibile per i commenti anonimi. Scegli un altro nome o accedi.",
 	"err.turnstile.required": "Controllo antispam non riuscito. Ricarica la pagina e riprova.",
 	"err.turnstile.invalid": "Controllo antispam non riuscito. Ricarica la pagina e riprova.",
 	"err.ratelimit": "Troppi commenti — rallenta e riprova tra un momento.",

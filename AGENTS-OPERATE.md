@@ -1084,7 +1084,8 @@ the row would orphan every reply written under it. What it clears:
   `provider_id`. That last one is the handle their next login is matched
   on — so a later sign-in creates a **fresh** account instead of
   resurrecting this one. For an anonymous ghost author, `provider_id`
-  *is* the `ip_hash`.
+  is the `ip_hash` (the bare vote/reaction ghost) or `<ip_hash>:<name key>`
+  (a comment ghost — one per name typed on that network).
 - `ip_hash` and `user_agent` on every comment they wrote, and
   `reporter_ip_hash` on every report they filed.
 - Their email subscriptions (plus any queued digest rows) and their
@@ -1140,7 +1141,8 @@ read/write time, no cron, no row migration.
 
 One-click **Ban author** reuses the user-ban mechanism. For an
 anonymous (ghost) author this is a *network-egress* ban keyed on the
-author's `ip_hash`, so behind CGNAT or a shared IP it can catch
+author's `ip_hash`: a ban on any ghost bars every ghost of that
+network, whatever name it types next. Behind CGNAT or a shared IP it can catch
 bystanders — the action confirms before banning. The originating
 comment id is recorded in the audit row's `meta.from_comment`.
 

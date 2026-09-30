@@ -14,9 +14,9 @@
  * already doing D1 work.
  */
 import {
-	getGhostByIpHash,
 	getOrCreateGhost,
 	getUser,
+	isIpHashBarred,
 	type User,
 } from "../db/queries";
 import { readSession } from "./session";
@@ -93,7 +93,11 @@ export const resolveActor = async (
 		return user ? { ok: true, userId: user.id } : { ok: false };
 	}
 	const ghost = await getOrCreateGhost(c.env.DB, ipHash, "anon");
-	if (!isActiveUser(ghost)) return { ok: false };
+	// A ban on any of this IP's per-name comment ghosts bars it here too — the
+	// admin bans the author of a comment, which is no longer this bare row.
+	if (!isActiveUser(ghost) || (await isIpHashBarred(c.env.DB, ipHash))) {
+		return { ok: false };
+	}
 	return { ok: true, userId: ghost.id };
 };
 
@@ -111,12 +115,14 @@ export const resolveActor = async (
  * half is unreachable today and checked anyway.
  *
  * No row means nothing to refuse: an ip_hash that has never posted has no
- * identity to have banned, so this is `false` and the caller carries on.
+ * identity to have banned, so this is `false` and the caller carries on. It
+ * still mints nothing: the check is a single read.
  */
 export const isInactiveGhost = async (
 	db: D1Database,
 	ipHash: string,
 ): Promise<boolean> => {
-	const ghost = await getGhostByIpHash(db, ipHash);
-	return ghost !== null && !isActiveUser(ghost);
+	// Every ghost on this ip_hash, bare or per-name, on the same banned-or-erased
+	// predicate as `isActiveUser`.
+	return isIpHashBarred(db, ipHash);
 };

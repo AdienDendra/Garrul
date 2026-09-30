@@ -25,14 +25,15 @@ import {
 	adminInsertSpamVerdict,
 	enqueueModeratorNotification,
 	enqueueNotification,
-	getOrCreateGhost,
 	getComment,
+	getOrCreateCommentGhost,
 	getPinnedThreadRef,
 	getPost,
 	getThreadCreatedAt,
 	getUser,
 	getUserVotesOnComments,
 	insertComment,
+	isIpHashBarred,
 	isUserRole,
 	listActiveSubscriptionsForPost,
 	listCommentsForThreads,
@@ -564,12 +565,15 @@ comments.post("/", async (c) => {
 		const bad = await verifyChallenge();
 		if (bad) return bad;
 
-		author = await getOrCreateGhost(c.env.DB, ipHash, nameCheck.name);
+		author = await getOrCreateCommentGhost(c.env.DB, ipHash, nameCheck.name);
 		// Same predicate as the signed-in branch below, so a ghost can't be
 		// gated on a narrower rule than a session user. `resolveActor` documents
 		// why the erased half can't currently fire on a ghost, and why running it
-		// anyway is what keeps that true.
-		if (!isActiveUser(author)) return c.json({ error: t("err.banned") }, 403);
+		// anyway is what keeps that true. The IP-wide check is what stops a
+		// banned reader from typing a new name to get a fresh, unbanned ghost.
+		if (!isActiveUser(author) || (await isIpHashBarred(c.env.DB, ipHash))) {
+			return c.json({ error: t("err.banned") }, 403);
+		}
 	} else {
 		// Signed-in posts skip the challenge by default. `turnstile_always`
 		// opts out of that: the operator has decided an OAuth account is not

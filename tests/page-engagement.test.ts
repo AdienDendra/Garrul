@@ -91,6 +91,8 @@ const makeDb = () => {
 				return { meta: { changes: 0 } };
 			},
 			async first<T>() {
+				// The IP-wide ban check (isIpHashBarred): no ghost on this IP is barred.
+				if (sql.includes("SELECT 1 AS hit FROM users")) return null;
 				if (sql.includes("FROM users")) {
 					// getOrCreateGhost lookup by ip_hash
 					const ip = String(binds[0]);

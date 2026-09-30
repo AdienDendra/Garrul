@@ -48,6 +48,16 @@ Votes, reactions and page-engagement rows don't store a hash of their
 own; they key on the ghost `users.id`, so the hash reaches them
 indirectly through `provider_id`.
 
+One network can hold several ghosts. Votes, reactions and page
+engagement share one **bare ghost** whose `provider_id` is the plain
+`ip_hash`. Each name typed on a comment gets its own **comment ghost**,
+`provider_id = "<ip_hash>:<name key>"`, where the name key is the
+case-, space- and punctuation-folded name (`nameKey` in
+`src/lib/display-name.ts`). Two people behind one address who type
+different names stay two commenters. A ban on *any* ghost of
+a network bars every ghost of that network, so a new name does not
+evade a ban.
+
 `IP_HASH_RETENTION_DAYS` is **off by default**, so on a stock install
 none of these three expire and a hash written on day one is still there
 on day one thousand. `npm run db:export` includes all three columns

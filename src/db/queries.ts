@@ -9,6 +9,7 @@
  *   - Timestamps are UNIX epoch milliseconds (INTEGER in D1).
  *   - Booleans are 0/1 INTEGER in D1; converted to JS booleans here.
  */
+import { nameKey } from "../lib/display-name";
 import { ulid } from "../lib/ulid";
 import { hostExpr } from "./host-expr";
 
@@ -392,6 +393,96 @@ export const getOrCreateGhost = async (
 		created_at: now,
 		erased_at: null,
 	};
+};
+
+/**
+ * The ghost an anonymous *comment* is attributed to: one per ip_hash **and**
+ * name, `provider_id = "<ip_hash>:<nameKey(name)>"`.
+ *
+ * `getOrCreateGhost` keys on the ip_hash alone and keeps the first name it was
+ * given, so everyone behind one office or carrier NAT posted under whichever of
+ * them commented first, a reader who changed their name kept the old one, and a
+ * reader who had voted first (which mints the ghost as "anon") commented as
+ * "anon". The bare ip_hash ghost stays the identity for votes, reactions and
+ * page engagement; only comment authorship moves here.
+ *
+ * A pre-existing bare ghost whose name already matches is adopted rather than
+ * shadowed, so a returning commenter keeps their history (and the first-comment
+ * hold's approved count) across the upgrade.
+ *
+ * Bans are per IP, not per ghost — see `isIpHashBarred`: a new name must not be
+ * a way round one.
+ */
+export const getOrCreateCommentGhost = async (
+	db: D1Database,
+	ipHash: string,
+	displayName: string,
+): Promise<User> => {
+	const key = nameKey(displayName) || displayName.toLowerCase();
+	const providerId = `${ipHash}:${key}`;
+	const { results } = await db
+		.prepare(
+			`SELECT ${USER_COLS}
+			 FROM users WHERE provider = 'anon' AND provider_id IN (?, ?)`,
+		)
+		.bind(providerId, ipHash)
+		.all<UserRow>();
+	const keyed = results.find((r) => r.provider_id === providerId);
+	if (keyed) return toUser(keyed);
+	const legacy = results.find((r) => r.provider_id === ipHash);
+	if (legacy && legacy.name !== "anon" && nameKey(legacy.name) === key) {
+		return toUser(legacy);
+	}
+
+	const id = ulid();
+	const now = Date.now();
+	await db
+		.prepare(
+			`INSERT INTO users (id, provider, provider_id, name, email,
+			                    avatar_url, is_admin, is_banned, created_at)
+			 VALUES (?, 'anon', ?, ?, NULL, NULL, 0, 0, ?)`,
+		)
+		.bind(id, providerId, displayName, now)
+		.run();
+
+	return {
+		id,
+		provider: "anon",
+		provider_id: providerId,
+		name: displayName,
+		email: null,
+		avatar_url: null,
+		is_admin: false,
+		is_banned: false,
+		role: "user",
+		created_at: now,
+		erased_at: null,
+	};
+};
+
+/**
+ * Whether any ghost on this ip_hash is refused — banned, or erased with its
+ * provider_id somehow kept (unreachable today; see `resolveActor` on why it is
+ * checked anyway): the bare ghost (votes, reactions) or any per-name comment
+ * ghost. One banned name bars the whole IP, which is what a ban meant when
+ * there was one ghost per IP. The range predicate is the
+ * `<ip_hash>:` prefix, written so the (provider, provider_id) UNIQUE index
+ * serves it (hex never contains ':' or ';').
+ */
+export const isIpHashBarred = async (
+	db: D1Database,
+	ipHash: string,
+): Promise<boolean> => {
+	const row = await db
+		.prepare(
+			`SELECT 1 AS hit FROM users
+			 WHERE provider = 'anon' AND (is_banned = 1 OR erased_at IS NOT NULL)
+			   AND (provider_id = ? OR (provider_id >= ? AND provider_id < ?))
+			 LIMIT 1`,
+		)
+		.bind(ipHash, `${ipHash}:`, `${ipHash};`)
+		.first<{ hit: number }>();
+	return row !== null;
 };
 
 /**

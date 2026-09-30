@@ -46,6 +46,8 @@ const makeDb = (status: string, settings: Record<string, string> = {}) => ({
 					depth: 1,
 				};
 			}
+			// The IP-wide ban check (isIpHashBarred): no ghost on this IP is barred.
+			if (sql.includes("SELECT 1 AS hit FROM users")) return null;
 			if (sql.includes("FROM users")) {
 				return {
 					id: GHOST_ID,

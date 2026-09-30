@@ -563,6 +563,13 @@ comments.post("/", async (c) => {
 		const denied = await enforceWriteBudget();
 		if (denied) return denied;
 
+		// Before the challenge and the ghost insert: a banned IP typing a new
+		// name would otherwise spend a siteverify call and add a users row on
+		// every refused attempt. One banned name bars the whole IP.
+		if (await isIpHashBarred(c.env.DB, ipHash)) {
+			return c.json({ error: t("err.banned") }, 403);
+		}
+
 		// After the budget, so the account lookup can't be driven faster than
 		// one post attempt per window; before the challenge, so a refused name
 		// doesn't spend a siteverify call.
@@ -580,9 +587,8 @@ comments.post("/", async (c) => {
 		// Same predicate as the signed-in branch below, so a ghost can't be
 		// gated on a narrower rule than a session user. `resolveActor` documents
 		// why the erased half can't currently fire on a ghost, and why running it
-		// anyway is what keeps that true. The IP-wide check is what stops a
-		// banned reader from typing a new name to get a fresh, unbanned ghost.
-		if (!isActiveUser(author) || (await isIpHashBarred(c.env.DB, ipHash))) {
+		// anyway is what keeps that true.
+		if (!isActiveUser(author)) {
 			return c.json({ error: t("err.banned") }, 403);
 		}
 	} else {

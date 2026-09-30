@@ -368,31 +368,32 @@ export const getOrCreateGhost = async (
 ): Promise<User> => {
 	const existing = await getGhostByIpHash(db, ipHash);
 	if (existing) return existing;
+	return insertGhost(db, ipHash, displayName);
+};
 
-	const id = ulid();
-	const now = Date.now();
+/**
+ * Insert a ghost, or read back the one a concurrent request inserted first.
+ * Two first requests from one IP both miss the lookup; a plain INSERT threw a
+ * UNIQUE error on the loser, and returning the loser's own ulid would point
+ * its comment at a row that doesn't exist.
+ */
+const insertGhost = async (
+	db: D1Database,
+	providerId: string,
+	displayName: string,
+): Promise<User> => {
 	await db
 		.prepare(
 			`INSERT INTO users (id, provider, provider_id, name, email,
 			                    avatar_url, is_admin, is_banned, created_at)
-			 VALUES (?, 'anon', ?, ?, NULL, NULL, 0, 0, ?)`,
+			 VALUES (?, 'anon', ?, ?, NULL, NULL, 0, 0, ?)
+			 ON CONFLICT(provider, provider_id) DO NOTHING`,
 		)
-		.bind(id, ipHash, displayName, now)
+		.bind(ulid(), providerId, displayName, Date.now())
 		.run();
-
-	return {
-		id,
-		provider: "anon",
-		provider_id: ipHash,
-		name: displayName,
-		email: null,
-		avatar_url: null,
-		is_admin: false,
-		is_banned: false,
-		role: "user",
-		created_at: now,
-		erased_at: null,
-	};
+	const row = await getGhostByIpHash(db, providerId);
+	if (!row) throw new Error("ghost insert returned no row");
+	return row;
 };
 
 /**
@@ -433,31 +434,7 @@ export const getOrCreateCommentGhost = async (
 	if (legacy && legacy.name !== "anon" && nameKey(legacy.name) === key) {
 		return toUser(legacy);
 	}
-
-	const id = ulid();
-	const now = Date.now();
-	await db
-		.prepare(
-			`INSERT INTO users (id, provider, provider_id, name, email,
-			                    avatar_url, is_admin, is_banned, created_at)
-			 VALUES (?, 'anon', ?, ?, NULL, NULL, 0, 0, ?)`,
-		)
-		.bind(id, providerId, displayName, now)
-		.run();
-
-	return {
-		id,
-		provider: "anon",
-		provider_id: providerId,
-		name: displayName,
-		email: null,
-		avatar_url: null,
-		is_admin: false,
-		is_banned: false,
-		role: "user",
-		created_at: now,
-		erased_at: null,
-	};
+	return insertGhost(db, providerId, displayName);
 };
 
 /**

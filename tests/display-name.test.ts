@@ -8,6 +8,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+	isReservedName,
 	MAX_NAME,
 	nameKey,
 	sanitizeDisplayName,
@@ -79,5 +80,20 @@ describe("nameKey", () => {
 
 	it("keeps different names different", () => {
 		expect(nameKey("KingPin")).not.toBe(nameKey("KingPins"));
+	});
+});
+
+describe("isReservedName", () => {
+	const list = "# held back\nSite Admin\n\nModerator";
+
+	it("matches a listed name by key, skipping comments and blanks", () => {
+		expect(isReservedName(list, "site_admin")).toBe(true);
+		expect(isReservedName(list, "ＭＯＤＥＲＡＴＯＲ")).toBe(true);
+		expect(isReservedName(list, "held back")).toBe(false);
+		expect(isReservedName(list, "")).toBe(false);
+	});
+
+	it("matches whole names only", () => {
+		expect(isReservedName(list, "Moderator fan")).toBe(false);
 	});
 });

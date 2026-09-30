@@ -486,6 +486,32 @@ export const isIpHashBarred = async (
 };
 
 /**
+ * Whether a signed-in account already posts publicly under this name key, so
+ * an anonymous commenter may not take it. Only accounts with a live approved
+ * comment count: matching every account would let anyone probe which names
+ * have signed in, and matching staff would reveal who is staff. A name that
+ * shows on the page is already public, so refusing it leaks nothing.
+ */
+export const isNameClaimed = async (
+	db: D1Database,
+	key: string,
+): Promise<boolean> => {
+	if (!key) return false;
+	const row = await db
+		.prepare(
+			`SELECT 1 AS hit FROM users u
+			 WHERE u.name_key = ? AND u.provider != 'anon' AND u.erased_at IS NULL
+			   AND EXISTS (SELECT 1 FROM comments c
+			               WHERE c.user_id = u.id AND c.status = 'approved'
+			                 AND c.deleted_at IS NULL)
+			 LIMIT 1`,
+		)
+		.bind(key)
+		.first<{ hit: number }>();
+	return row !== null;
+};
+
+/**
  * Upsert an OAuth user keyed on (provider, provider_id).
  *
  * On UPDATE we refresh non-security-sensitive display fields (name +
@@ -523,10 +549,10 @@ export const upsertOauthUser = async (
 		await db
 			.prepare(
 				`UPDATE users
-				    SET name = ?, avatar_url = ?
+				    SET name = ?, name_key = ?, avatar_url = ?
 				  WHERE id = ?`,
 			)
-			.bind(name, avatar_url, existing.id)
+			.bind(name, nameKey(name), avatar_url, existing.id)
 			.run();
 		return toUser({
 			...existing,
@@ -542,11 +568,11 @@ export const upsertOauthUser = async (
 	const role: UserRole = shouldPromote ? "admin" : "user";
 	await db
 		.prepare(
-			`INSERT INTO users (id, provider, provider_id, name, email,
+			`INSERT INTO users (id, provider, provider_id, name, name_key, email,
 			                    avatar_url, is_admin, is_banned, role, created_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
 		)
-		.bind(id, provider, provider_id, name, email, avatar_url, is_admin, role, now)
+		.bind(id, provider, provider_id, name, nameKey(name), email, avatar_url, is_admin, role, now)
 		.run();
 	return {
 		id,
@@ -1780,7 +1806,7 @@ export const eraseUserData = async (
 			.prepare(
 				`UPDATE users
 				    SET name = ?, email = NULL, avatar_url = NULL,
-				        provider_id = NULL, erased_at = ?
+				        provider_id = NULL, name_key = NULL, erased_at = ?
 				  WHERE id = ?`,
 			)
 			.bind(placeholderName, now, id),

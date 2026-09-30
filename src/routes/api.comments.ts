@@ -34,6 +34,7 @@ import {
 	getUserVotesOnComments,
 	insertComment,
 	isIpHashBarred,
+	isNameClaimed,
 	isUserRole,
 	listActiveSubscriptionsForPost,
 	listCommentsForThreads,
@@ -53,7 +54,7 @@ import {
 	type User,
 } from "../db/queries";
 import { allowedPostUrl } from "../lib/cors";
-import { MAX_NAME, sanitizeDisplayName } from "../lib/display-name";
+import { isReservedName, MAX_NAME, nameKey, sanitizeDisplayName } from "../lib/display-name";
 import { identiconSvg } from "../lib/identicon";
 import { sanitizePostTitle } from "../lib/post-title";
 import { clientIp, requireIpHash } from "../lib/ip-hash";
@@ -561,6 +562,16 @@ comments.post("/", async (c) => {
 
 		const denied = await enforceWriteBudget();
 		if (denied) return denied;
+
+		// After the budget, so the account lookup can't be driven faster than
+		// one post attempt per window; before the challenge, so a refused name
+		// doesn't spend a siteverify call.
+		if (
+			isReservedName(texts.reserved_names, nameCheck.name) ||
+			(await isNameClaimed(c.env.DB, nameKey(nameCheck.name)))
+		) {
+			return c.json({ error: t("err.name.reserved") }, 400);
+		}
 
 		const bad = await verifyChallenge();
 		if (bad) return bad;

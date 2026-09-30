@@ -1619,6 +1619,18 @@ characters, DB-only, no env var). It replaces the badge text on comments a
 moderator posted as staff. Empty uses each reader's locale string. The widget
 receives it as `staff_badge_label` in `/api/v1/config` (null when unset).
 
+**Reserved names.** Admin → Settings → Moderation → *Reserved names* (one per
+line, `#` comments, DB-only, never sent to the widget). An anonymous commenter
+can't post under a listed name. Separately, and with no setting, an anonymous
+commenter can't post under the name of a signed-in account that has at least
+one approved, live comment — only accounts already public on the page count,
+so the refusal reveals nothing about who has signed in or who is staff. Both
+compare `nameKey` (case, spaces, `. _ -` and NFKC-folded forms), whole names
+only. Cross-script lookalikes (Cyrillic `К` for Latin `K`) are not caught.
+Signed-in names are keyed in `users.name_key` (migration 0028); the migration
+backfills an ASCII approximation, and each account gets its exact key on its
+next login.
+
 ### Mount cost and free-tier headroom (since v2.15.0)
 
 The Workers free tier allows **100,000 requests/day**, and what a

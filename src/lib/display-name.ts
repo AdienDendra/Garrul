@@ -72,3 +72,17 @@ export const nameKey = (name: string): string =>
 		.normalize("NFKC")
 		.toLowerCase()
 		.replace(/[\s\p{Cf}._\-·'’]/gu, "");
+
+/**
+ * Whether `name` is on the operator's reserved-names list: one name per line,
+ * blank lines and `#` comments skipped, compared by `nameKey` so a respelling
+ * of a listed name is caught too. Whole-name match only — reserving "admin"
+ * does not refuse "admin fan".
+ */
+export const isReservedName = (list: string, name: string): boolean => {
+	const key = nameKey(name);
+	if (!key) return false;
+	return list
+		.split("\n")
+		.some((line) => !line.trim().startsWith("#") && nameKey(line) === key);
+};

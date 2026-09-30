@@ -14,8 +14,11 @@ import {
 	getOrCreateCommentGhost,
 	getOrCreateGhost,
 	isIpHashBarred,
+	isNameClaimed,
 	setUserBanned,
+	upsertOauthUser,
 } from "../src/db/queries";
+import { nameKey } from "../src/lib/display-name";
 import { makeD1 } from "./helpers/admin-sqlite";
 
 const DIR = join(__dirname, "../src/db/migrations");
@@ -23,9 +26,10 @@ const IP = "ab12";
 const OTHER_IP = "ab123";
 
 let db: D1Database;
+let sqlite: DatabaseSync;
 
 beforeEach(() => {
-	const sqlite = new DatabaseSync(":memory:");
+	sqlite = new DatabaseSync(":memory:");
 	for (const f of readdirSync(DIR).filter((f) => f.endsWith(".sql")).sort()) {
 		sqlite.exec(readFileSync(join(DIR, f), "utf8"));
 	}
@@ -89,5 +93,28 @@ describe("isIpHashBarred", () => {
 		const other = await getOrCreateCommentGhost(db, OTHER_IP, "Ada");
 		await setUserBanned(db, other.id, true);
 		expect(await isIpHashBarred(db, IP)).toBe(false);
+	});
+});
+
+describe("isNameClaimed", () => {
+	it("claims a login's name once it has an approved comment, and follows a rename", async () => {
+		const u = await upsertOauthUser(db, "github", "7", "𝐀𝐝𝐚", null, null, new Set());
+		expect(await isNameClaimed(db, nameKey("ada"))).toBe(false);
+		sqlite.exec("INSERT INTO posts (slug, title, url, created_at) VALUES ('p', 'P', NULL, 0)");
+		sqlite
+			.prepare(
+				`INSERT INTO comments (id, post_slug, parent_id, user_id, body_md, body_html, renderer_version, status, created_at, depth)
+				 VALUES ('c1', 'p', NULL, ?, 'hi', '<p>hi</p>', 1, 'approved', 0, 1)`,
+			)
+			.run(u.id);
+		expect(await isNameClaimed(db, nameKey("ada"))).toBe(true);
+		await upsertOauthUser(db, "github", "7", "Grace", null, null, new Set());
+		expect(await isNameClaimed(db, nameKey("ada"))).toBe(false);
+		expect(await isNameClaimed(db, nameKey("GRACE"))).toBe(true);
+	});
+
+	it("never claims a ghost's name", async () => {
+		await getOrCreateCommentGhost(db, IP, "Ada");
+		expect(await isNameClaimed(db, nameKey("Ada"))).toBe(false);
 	});
 });

@@ -135,3 +135,48 @@ describe("POST /comments — name validation", () => {
 		expect(await withCtrl.json()).toEqual(await clean.json());
 	});
 });
+
+describe("POST /comments — reserved names", () => {
+	const RESERVED = "This name is taken by a signed-in user. Pick another name, or sign in if it is yours.";
+	const withToken = (name: string) =>
+		post({ slug: SLUG, name, body: "ordinary body", turnstile_token: "tok" });
+	const addOauthUser = (id: string, name: string, status: string | null) => {
+		sqlite
+			.prepare(
+				`INSERT INTO users (id, provider, provider_id, name, name_key, email, avatar_url, is_admin, is_banned, created_at)
+				 VALUES (?, 'github', ?, ?, 'adalovelace', NULL, NULL, 0, 0, 0)`,
+			)
+			.run(id, id, name);
+		if (status) {
+			sqlite
+				.prepare(
+					`INSERT INTO comments (id, post_slug, parent_id, user_id, body_md, body_html,
+					                       renderer_version, status, created_at, depth)
+					 VALUES (?, ?, NULL, ?, 'hi', '<p>hi</p>', 1, ?, 0, 1)`,
+				)
+				.run(`c-${id}`, SLUG, id, status);
+		}
+	};
+
+	it("refuses a respelling of a name a signed-in user posts under", async () => {
+		addOauthUser("u1", "Ada Lovelace", "approved");
+		const res = await withToken("ada.lovelace");
+		expect(res.status).toBe(400);
+		expect(await res.json()).toEqual({ error: RESERVED });
+	});
+
+	it("does not reserve a signed-in name with no public comment", async () => {
+		// Otherwise the refusal is an oracle for which names have signed in.
+		addOauthUser("u2", "Ada Lovelace", "pending");
+		const res = await withToken("Ada Lovelace");
+		expect(await res.json()).not.toEqual({ error: RESERVED });
+	});
+
+	it("refuses a name on the operator's list", async () => {
+		sqlite
+			.prepare("INSERT INTO settings (key, value, updated_at) VALUES ('reserved_names', ?, 0)")
+			.run("# staff\nSite Admin");
+		expect(await (await withToken("SITE_ADMIN")).json()).toEqual({ error: RESERVED });
+		expect(await (await withToken("Site Admin fan")).json()).not.toEqual({ error: RESERVED });
+	});
+});

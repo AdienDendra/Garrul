@@ -886,7 +886,9 @@ button:active:not([disabled]) { opacity: 0.75; }
 }
 .gr-signin button:hover { background: var(--gr-hover); border-color: var(--gr-accent); }
 .gr-signed { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; color: var(--gr-muted); font-size: 0.9em; }
-.gr-signed .gr-signed-name { color: var(--gr-fg); font-weight: 600; }
+/* Same treatment as .gr-name: a long unbroken provider name wraps inside the
+   composer instead of widening it. */
+.gr-signed .gr-signed-name { color: var(--gr-fg); font-weight: 600; unicode-bidi: isolate; overflow-wrap: anywhere; min-width: 0; }
 .gr-signed button {
 	font: inherit;
 	background: transparent;

@@ -368,7 +368,7 @@ export const getOrCreateGhost = async (
 ): Promise<User> => {
 	const existing = await getGhostByIpHash(db, ipHash);
 	if (existing) return existing;
-	return insertGhost(db, ipHash, displayName);
+	return insertGhost(db, ipHash, displayName, null);
 };
 
 /**
@@ -381,15 +381,16 @@ const insertGhost = async (
 	db: D1Database,
 	providerId: string,
 	displayName: string,
+	key: string | null,
 ): Promise<User> => {
 	await db
 		.prepare(
-			`INSERT INTO users (id, provider, provider_id, name, email,
+			`INSERT INTO users (id, provider, provider_id, name, name_key, email,
 			                    avatar_url, is_admin, is_banned, created_at)
-			 VALUES (?, 'anon', ?, ?, NULL, NULL, 0, 0, ?)
+			 VALUES (?, 'anon', ?, ?, ?, NULL, NULL, 0, 0, ?)
 			 ON CONFLICT(provider, provider_id) DO NOTHING`,
 		)
-		.bind(ulid(), providerId, displayName, Date.now())
+		.bind(ulid(), providerId, displayName, key, Date.now())
 		.run();
 	const row = await getGhostByIpHash(db, providerId);
 	if (!row) throw new Error("ghost insert returned no row");
@@ -434,7 +435,8 @@ export const getOrCreateCommentGhost = async (
 	if (legacy && legacy.name !== "anon" && nameKey(legacy.name) === key) {
 		return toUser(legacy);
 	}
-	return insertGhost(db, providerId, displayName);
+	// name_key lets `isNameClaimed` see who used a name first.
+	return insertGhost(db, providerId, displayName, key);
 };
 
 /**
@@ -485,30 +487,43 @@ export const isGhostOfIpHash = async (
 	return row !== null;
 };
 
+/** How long a name stays claimed after its holder's last approved comment. */
+export const NAME_CLAIM_WINDOW_MS = 365 * 24 * 60 * 60 * 1000;
+
 /**
- * Whether a signed-in account already posts publicly under this name key, so
- * an anonymous commenter may not take it. Only accounts with a live approved
- * comment count: matching every account would let anyone probe which names
- * have signed in, and matching staff would reveal who is staff. A name that
- * shows on the page is already public, so refusing it leaks nothing.
+ * Whether a signed-in account holds this name key, so an anonymous commenter
+ * may not take it. The account holds it when it has an approved comment in
+ * the last `NAME_CLAIM_WINDOW_MS`, and its first approved comment predates
+ * that of every anonymous author who used the name in the same window: a
+ * later sign-up can't take an anonymous regular's name, and a name nobody has
+ * used for a year is free again.
+ *
+ * Only approved, live comments count, on both sides. Matching every account
+ * would let anyone probe which names have signed in, and matching staff would
+ * reveal who is staff; a name that shows on the page is already public, and so
+ * is which use of it came first. Banned and erased rows hold nothing.
  */
 export const isNameClaimed = async (
 	db: D1Database,
 	key: string,
+	now = Date.now(),
 ): Promise<boolean> => {
 	if (!key) return false;
 	const row = await db
 		.prepare(
-			`SELECT 1 AS hit FROM users u
-			 WHERE u.name_key = ? AND u.provider != 'anon' AND u.erased_at IS NULL
-			   AND EXISTS (SELECT 1 FROM comments c
-			               WHERE c.user_id = u.id AND c.status = 'approved'
-			                 AND c.deleted_at IS NULL)
-			 LIMIT 1`,
+			`SELECT MIN(CASE WHEN provider != 'anon' THEN first END) AS signed,
+			        MIN(CASE WHEN provider = 'anon' THEN first END) AS anon
+			 FROM (SELECT u.provider, MIN(c.created_at) AS first
+			       FROM users u JOIN comments c ON c.user_id = u.id
+			       WHERE u.name_key = ? AND u.erased_at IS NULL AND u.is_banned = 0
+			         AND c.status = 'approved' AND c.deleted_at IS NULL
+			       GROUP BY u.id
+			       HAVING MAX(c.created_at) >= ?)`,
 		)
-		.bind(key)
-		.first<{ hit: number }>();
-	return row !== null;
+		.bind(key, now - NAME_CLAIM_WINDOW_MS)
+		.first<{ signed: number | null; anon: number | null }>();
+	if (row?.signed == null) return false;
+	return row.anon == null || row.signed < row.anon;
 };
 
 /**

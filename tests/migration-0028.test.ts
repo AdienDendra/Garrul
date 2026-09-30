@@ -1,6 +1,6 @@
 /**
- * Migration 0028 backfills users.name_key for signed-in accounts only, with an
- * ASCII approximation of nameKey that the next login replaces.
+ * Migration 0028 backfills users.name_key for every live account, ghosts
+ * included, with an ASCII approximation of nameKey that the next login replaces.
  */
 import { expect, it } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
@@ -9,7 +9,7 @@ import { DatabaseSync } from "node:sqlite";
 
 const DIR = join(__dirname, "../src/db/migrations");
 
-it("keys OAuth names, and leaves ghosts and erased accounts unkeyed", () => {
+it("keys OAuth and ghost names, and leaves erased accounts unkeyed", () => {
 	const db = new DatabaseSync(":memory:");
 	const files = readdirSync(DIR).filter((f) => f.endsWith(".sql")).sort();
 	for (const f of files.filter((f) => f < "0028")) db.exec(readFileSync(join(DIR, f), "utf8"));
@@ -30,5 +30,5 @@ it("keys OAuth names, and leaves ghosts and erased accounts unkeyed", () => {
 			r.name_key,
 		]),
 	);
-	expect(keys).toEqual({ a: "adalovelacejr", b: null, c: null });
+	expect(keys).toEqual({ a: "adalovelacejr", b: "ada", c: null });
 });

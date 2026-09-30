@@ -152,9 +152,9 @@ describe("POST /comments — reserved names", () => {
 				.prepare(
 					`INSERT INTO comments (id, post_slug, parent_id, user_id, body_md, body_html,
 					                       renderer_version, status, created_at, depth)
-					 VALUES (?, ?, NULL, ?, 'hi', '<p>hi</p>', 1, ?, 0, 1)`,
+					 VALUES (?, ?, NULL, ?, 'hi', '<p>hi</p>', 1, ?, ?, 1)`,
 				)
-				.run(`c-${id}`, SLUG, id, status);
+				.run(`c-${id}`, SLUG, id, status, Date.now());
 		}
 	};
 

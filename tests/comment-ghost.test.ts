@@ -97,16 +97,21 @@ describe("isIpHashBarred", () => {
 });
 
 describe("isNameClaimed", () => {
-	it("claims a login's name once it has an approved comment, and follows a rename", async () => {
-		const u = await upsertOauthUser(db, "github", "7", "𝐀𝐝𝐚", null, null, new Set());
-		expect(await isNameClaimed(db, nameKey("ada"))).toBe(false);
-		sqlite.exec("INSERT INTO posts (slug, title, url, created_at) VALUES ('p', 'P', NULL, 0)");
+	const DAY = 24 * 60 * 60 * 1000;
+	const approve = (id: string, userId: string, at: number) => {
+		sqlite.exec("INSERT OR IGNORE INTO posts (slug, title, url, created_at) VALUES ('p', 'P', NULL, 0)");
 		sqlite
 			.prepare(
 				`INSERT INTO comments (id, post_slug, parent_id, user_id, body_md, body_html, renderer_version, status, created_at, depth)
-				 VALUES ('c1', 'p', NULL, ?, 'hi', '<p>hi</p>', 1, 'approved', 0, 1)`,
+				 VALUES (?, 'p', NULL, ?, 'hi', '<p>hi</p>', 1, 'approved', ?, 1)`,
 			)
-			.run(u.id);
+			.run(id, userId, at);
+	};
+
+	it("claims a login's name once it has an approved comment, and follows a rename", async () => {
+		const u = await upsertOauthUser(db, "github", "7", "𝐀𝐝𝐚", null, null, new Set());
+		expect(await isNameClaimed(db, nameKey("ada"))).toBe(false);
+		approve("c1", u.id, Date.now());
 		expect(await isNameClaimed(db, nameKey("ada"))).toBe(true);
 		await upsertOauthUser(db, "github", "7", "Grace", null, null, new Set());
 		expect(await isNameClaimed(db, nameKey("ada"))).toBe(false);
@@ -116,5 +121,41 @@ describe("isNameClaimed", () => {
 	it("never claims a ghost's name", async () => {
 		await getOrCreateCommentGhost(db, IP, "Ada");
 		expect(await isNameClaimed(db, nameKey("Ada"))).toBe(false);
+	});
+
+	it("leaves the name to an anonymous author who used it first", async () => {
+		const now = Date.now();
+		const ghost = await getOrCreateCommentGhost(db, IP, "Ada");
+		approve("c-anon", ghost.id, now - 10 * DAY);
+		const u = await upsertOauthUser(db, "github", "7", "Ada", null, null, new Set());
+		approve("c-oauth", u.id, now - DAY);
+		expect(await isNameClaimed(db, nameKey("Ada"), now)).toBe(false);
+	});
+
+	it("claims it over an anonymous author who came later", async () => {
+		const now = Date.now();
+		const u = await upsertOauthUser(db, "github", "7", "Ada", null, null, new Set());
+		approve("c-oauth", u.id, now - 10 * DAY);
+		const ghost = await getOrCreateCommentGhost(db, IP, "Ada");
+		approve("c-anon", ghost.id, now - DAY);
+		expect(await isNameClaimed(db, nameKey("Ada"), now)).toBe(true);
+	});
+
+	it("lapses a year after the holder's last approved comment", async () => {
+		const now = Date.now();
+		const u = await upsertOauthUser(db, "github", "7", "Ada", null, null, new Set());
+		approve("c-old", u.id, now - 400 * DAY);
+		expect(await isNameClaimed(db, nameKey("Ada"), now)).toBe(false);
+		approve("c-new", u.id, now - 300 * DAY);
+		expect(await isNameClaimed(db, nameKey("Ada"), now)).toBe(true);
+	});
+
+	it("ignores an anonymous first use that has itself lapsed", async () => {
+		const now = Date.now();
+		const ghost = await getOrCreateCommentGhost(db, IP, "Ada");
+		approve("c-anon", ghost.id, now - 400 * DAY);
+		const u = await upsertOauthUser(db, "github", "7", "Ada", null, null, new Set());
+		approve("c-oauth", u.id, now - DAY);
+		expect(await isNameClaimed(db, nameKey("Ada"), now)).toBe(true);
 	});
 });

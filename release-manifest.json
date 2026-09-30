@@ -397,7 +397,8 @@
     "0023_moderator_notes.sql",
     "0024_subscriptions_token_index.sql",
     "0025_comment_pins.sql",
-    "0026_staff_badge.sql"
+    "0026_staff_badge.sql",
+    "0027_oauth_email_names.sql"
   ],
   "breakingChanges": [
     {

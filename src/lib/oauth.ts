@@ -22,6 +22,7 @@
  * off-origin round-trip is fine for a cookie — the provider redirects the
  * browser back to us top-level, so a SameSite=Lax cookie is delivered.
  */
+import { sanitizeDisplayName, truncateName } from "./display-name";
 import { constantTimeEqual, signPayload, verifyPayload } from "./hmac";
 
 export type ProviderId =
@@ -74,6 +75,20 @@ type ProviderConfig = {
 	fetch_profile: (access_token: string) => Promise<ProviderProfile>;
 };
 
+/**
+ * The first provider-supplied name that survives the display-name sanitizer,
+ * cut to the stored length. Never the email: a provider that returns no name
+ * used to fall back to it, which published the address on every comment the
+ * user wrote. "user" is the last resort, as it was before.
+ */
+const profileName = (...candidates: (string | null | undefined)[]): string => {
+	for (const c of candidates) {
+		const name = truncateName(sanitizeDisplayName(c ?? ""));
+		if (name) return name;
+	}
+	return "user";
+};
+
 const fetchGithubProfile = async (token: string): Promise<ProviderProfile> => {
 	const headers = {
 		authorization: `Bearer ${token}`,
@@ -112,7 +127,7 @@ const fetchGithubProfile = async (token: string): Promise<ProviderProfile> => {
 	return {
 		provider_id: String(u.id),
 		email,
-		name: u.name?.trim() || u.login,
+		name: profileName(u.name, u.login),
 		avatar_url: u.avatar_url,
 	};
 };
@@ -128,12 +143,13 @@ const fetchGoogleProfile = async (token: string): Promise<ProviderProfile> => {
 		email?: string;
 		email_verified?: boolean;
 		name?: string;
+		given_name?: string;
 		picture?: string;
 	};
 	return {
 		provider_id: u.sub,
 		email: u.email_verified ? (u.email ?? null) : null,
-		name: u.name?.trim() || u.email || "user",
+		name: profileName(u.name, u.given_name),
 		avatar_url: u.picture ?? null,
 	};
 };
@@ -158,7 +174,7 @@ const fetchFacebookProfile = async (
 	return {
 		provider_id: u.id,
 		email: u.email ?? null,
-		name: u.name?.trim() || u.email || "user",
+		name: profileName(u.name),
 		avatar_url: u.picture?.data?.url ?? null,
 	};
 };
@@ -186,7 +202,7 @@ const fetchTwitterProfile = async (
 	return {
 		provider_id: data.id,
 		email: null,
-		name: data.name?.trim() || data.username || "user",
+		name: profileName(data.name, data.username),
 		// Default avatar is the 48px "_normal" variant; dropping the suffix
 		// yields the original full-size image.
 		avatar_url: data.profile_image_url?.replace("_normal", "") ?? null,
@@ -214,7 +230,7 @@ const fetchDiscordProfile = async (
 	return {
 		provider_id: u.id,
 		email: u.verified ? (u.email ?? null) : null,
-		name: u.global_name?.trim() || u.username,
+		name: profileName(u.global_name, u.username),
 		avatar_url: u.avatar
 			? `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.png`
 			: null,

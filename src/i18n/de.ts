@@ -27,6 +27,7 @@ export const de = {
 		"Dieser Thread ist zu tief verschachtelt. Bitte weiter oben im Thread antworten.",
 	"err.name.required": "Ein Anzeigename ist erforderlich.",
 	"err.name.too_long": "Der Anzeigename ist zu lang (maximal {max} Zeichen).",
+	"err.name.reserved": "Dieser Name ist für anonyme Kommentare nicht verfügbar. Wähle einen anderen Namen oder melde dich an.",
 	"err.turnstile.required": "Spam-Prüfung fehlgeschlagen. Bitte neu laden und erneut versuchen.",
 	"err.turnstile.invalid": "Spam-Prüfung fehlgeschlagen. Bitte neu laden und erneut versuchen.",
 	"err.ratelimit": "Zu viele Kommentare — bitte etwas langsamer und gleich noch einmal versuchen.",

@@ -422,6 +422,23 @@ export const renderSettings = (
 		placeholder: "viagra\n*casino*\nt.me/*",
 	});
 
+	const reservedNamesTextarea = renderTextarea({
+		name: "reserved_names",
+		model: "texts.reserved_names",
+		label: "Reserved names",
+		help: `One name per line. An anonymous commenter can't post under any of
+		them. Matching ignores case, spaces, <code>.</code> <code>_</code>
+		<code>-</code> and lookalike forms, so <code>Site Admin</code> also
+		catches <code>site_admin</code> and <code>ＳＩＴＥＡＤＭＩＮ</code>. Whole names
+		only: <code>admin</code> does not refuse "admin fan". Lines starting with
+		<code>#</code> are comments. Names that signed-in users already post
+		under are refused automatically; list only names you want held back on
+		top of those — your own, or your site's.`,
+		rows: 4,
+		maxlength: MAX_TEXT_SETTING_CHARS,
+		placeholder: "Site Admin\nModerator",
+	});
+
 	const securityContactTextarea = renderTextarea({
 		name: "security_contact",
 		model: "texts.security_contact",
@@ -656,6 +673,7 @@ export const renderSettings = (
       the same as never having set one: it overrides whatever
       <code>SPAM_BLOCKLIST</code> your deploy ships. "Reset to defaults" is the
       way back to that.</p>
+      ${reservedNamesTextarea}
     </div>
 
     <div class="card" x-show="tab === 'moderation'" x-cloak>

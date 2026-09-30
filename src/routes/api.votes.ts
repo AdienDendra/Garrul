@@ -19,7 +19,7 @@
  */
 import { Hono } from "hono";
 import type { Bindings } from "../index";
-import { castVote, getComment, type VoteValue } from "../db/queries";
+import { castVote, getComment, isGhostOfIpHash, type VoteValue } from "../db/queries";
 import { resolveActor } from "../lib/active-user";
 import { requireIpHash } from "../lib/ip-hash";
 import { checkRateLimit } from "../lib/ratelimit";
@@ -101,11 +101,15 @@ votes.post("/", async (c) => {
 	if (!actor.ok) return c.json({ error: t("err.banned") }, 403);
 	const userId = actor.userId;
 
-	// Authors can't vote on their own comment. Works for both authenticated
-	// users (session user_id) and anonymous viewers (IP-hash ghost) because
-	// comments.user_id is whichever identity posted. Without this guard a
-	// self-upvote silently floats your own thread under sort=top.
-	if (userId === comment.user_id) {
+	// Authors can't vote on their own comment. Without this guard a
+	// self-upvote silently floats your own thread under sort=top. A session
+	// user matches on user_id; an anonymous voter is the bare IP ghost while
+	// their comment is on a per-name ghost, so it matches on the IP instead —
+	// the same NAT-wide reach the single IP ghost always had.
+	if (
+		userId === comment.user_id ||
+		(actor.anon && (await isGhostOfIpHash(c.env.DB, comment.user_id, ipHash)))
+	) {
 		return c.json({ error: "vote_self_forbidden" }, 403);
 	}
 

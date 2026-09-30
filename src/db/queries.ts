@@ -9,6 +9,7 @@
  *   - Timestamps are UNIX epoch milliseconds (INTEGER in D1).
  *   - Booleans are 0/1 INTEGER in D1; converted to JS booleans here.
  */
+import { nameKey } from "../lib/display-name";
 import { ulid } from "../lib/ulid";
 import { hostExpr } from "./host-expr";
 
@@ -367,31 +368,162 @@ export const getOrCreateGhost = async (
 ): Promise<User> => {
 	const existing = await getGhostByIpHash(db, ipHash);
 	if (existing) return existing;
+	return insertGhost(db, ipHash, displayName, null);
+};
 
-	const id = ulid();
-	const now = Date.now();
+/**
+ * Insert a ghost, or read back the one a concurrent request inserted first.
+ * Two first requests from one IP both miss the lookup; a plain INSERT threw a
+ * UNIQUE error on the loser, and returning the loser's own ulid would point
+ * its comment at a row that doesn't exist.
+ */
+const insertGhost = async (
+	db: D1Database,
+	providerId: string,
+	displayName: string,
+	key: string | null,
+): Promise<User> => {
 	await db
 		.prepare(
-			`INSERT INTO users (id, provider, provider_id, name, email,
+			`INSERT INTO users (id, provider, provider_id, name, name_key, email,
 			                    avatar_url, is_admin, is_banned, created_at)
-			 VALUES (?, 'anon', ?, ?, NULL, NULL, 0, 0, ?)`,
+			 VALUES (?, 'anon', ?, ?, ?, NULL, NULL, 0, 0, ?)
+			 ON CONFLICT(provider, provider_id) DO NOTHING`,
 		)
-		.bind(id, ipHash, displayName, now)
+		.bind(ulid(), providerId, displayName, key, Date.now())
 		.run();
+	const row = await getGhostByIpHash(db, providerId);
+	if (!row) throw new Error("ghost insert returned no row");
+	return row;
+};
 
-	return {
-		id,
-		provider: "anon",
-		provider_id: ipHash,
-		name: displayName,
-		email: null,
-		avatar_url: null,
-		is_admin: false,
-		is_banned: false,
-		role: "user",
-		created_at: now,
-		erased_at: null,
-	};
+/**
+ * The ghost an anonymous *comment* is attributed to: one per ip_hash **and**
+ * name, `provider_id = "<ip_hash>:<nameKey(name)>"`.
+ *
+ * `getOrCreateGhost` keys on the ip_hash alone and keeps the first name it was
+ * given, so everyone behind one office or carrier NAT posted under whichever of
+ * them commented first, a reader who changed their name kept the old one, and a
+ * reader who had voted first (which mints the ghost as "anon") commented as
+ * "anon". The bare ip_hash ghost stays the identity for votes, reactions and
+ * page engagement; only comment authorship moves here.
+ *
+ * A pre-existing bare ghost whose name already matches is adopted rather than
+ * shadowed, so a returning commenter keeps their history (and the first-comment
+ * hold's approved count) across the upgrade.
+ *
+ * Bans are per IP, not per ghost — see `isIpHashBarred`: a new name must not be
+ * a way round one.
+ */
+export const getOrCreateCommentGhost = async (
+	db: D1Database,
+	ipHash: string,
+	displayName: string,
+): Promise<User> => {
+	const key = nameKey(displayName) || displayName.toLowerCase();
+	const providerId = `${ipHash}:${key}`;
+	const { results } = await db
+		.prepare(
+			`SELECT ${USER_COLS}
+			 FROM users WHERE provider = 'anon' AND provider_id IN (?, ?)`,
+		)
+		.bind(providerId, ipHash)
+		.all<UserRow>();
+	const keyed = results.find((r) => r.provider_id === providerId);
+	if (keyed) return toUser(keyed);
+	const legacy = results.find((r) => r.provider_id === ipHash);
+	if (legacy && legacy.name !== "anon" && nameKey(legacy.name) === key) {
+		return toUser(legacy);
+	}
+	// name_key lets `isNameClaimed` see who used a name first.
+	return insertGhost(db, providerId, displayName, key);
+};
+
+/**
+ * Whether any ghost on this ip_hash is refused — banned, or erased with its
+ * provider_id somehow kept (unreachable today; see `resolveActor` on why it is
+ * checked anyway): the bare ghost (votes, reactions) or any per-name comment
+ * ghost. One banned name bars the whole IP, which is what a ban meant when
+ * there was one ghost per IP. The range predicate is the
+ * `<ip_hash>:` prefix, written so the (provider, provider_id) UNIQUE index
+ * serves it (hex never contains ':' or ';').
+ */
+export const isIpHashBarred = async (
+	db: D1Database,
+	ipHash: string,
+): Promise<boolean> => {
+	const row = await db
+		.prepare(
+			`SELECT 1 AS hit FROM users
+			 WHERE provider = 'anon' AND (is_banned = 1 OR erased_at IS NOT NULL)
+			   AND (provider_id = ? OR (provider_id >= ? AND provider_id < ?))
+			 LIMIT 1`,
+		)
+		.bind(ipHash, `${ipHash}:`, `${ipHash};`)
+		.first<{ hit: number }>();
+	return row !== null;
+};
+
+/**
+ * Whether `userId` is one of this ip_hash's ghosts — the bare one or any
+ * per-name comment ghost. An anonymous voter resolves to the bare ghost while
+ * their comments sit on a per-name one, so `userId === comment.user_id` alone
+ * no longer catches an anonymous self-vote. Keys on `provider_id`, not
+ * `comments.ip_hash`, which the retention sweep clears.
+ */
+export const isGhostOfIpHash = async (
+	db: D1Database,
+	userId: string,
+	ipHash: string,
+): Promise<boolean> => {
+	const row = await db
+		.prepare(
+			`SELECT 1 AS hit FROM users
+			 WHERE id = ? AND provider = 'anon'
+			   AND (provider_id = ? OR (provider_id >= ? AND provider_id < ?))`,
+		)
+		.bind(userId, ipHash, `${ipHash}:`, `${ipHash};`)
+		.first<{ hit: number }>();
+	return row !== null;
+};
+
+/** How long a name stays claimed after its holder's last approved comment. */
+export const NAME_CLAIM_WINDOW_MS = 365 * 24 * 60 * 60 * 1000;
+
+/**
+ * Whether a signed-in account holds this name key, so an anonymous commenter
+ * may not take it. The account holds it when it has an approved comment in
+ * the last `NAME_CLAIM_WINDOW_MS`, and its first approved comment predates
+ * that of every anonymous author who used the name in the same window: a
+ * later sign-up can't take an anonymous regular's name, and a name nobody has
+ * used for a year is free again.
+ *
+ * Only approved, live comments count, on both sides. Matching every account
+ * would let anyone probe which names have signed in, and matching staff would
+ * reveal who is staff; a name that shows on the page is already public, and so
+ * is which use of it came first. Banned and erased rows hold nothing.
+ */
+export const isNameClaimed = async (
+	db: D1Database,
+	key: string,
+	now = Date.now(),
+): Promise<boolean> => {
+	if (!key) return false;
+	const row = await db
+		.prepare(
+			`SELECT MIN(CASE WHEN provider != 'anon' THEN first END) AS signed,
+			        MIN(CASE WHEN provider = 'anon' THEN first END) AS anon
+			 FROM (SELECT u.provider, MIN(c.created_at) AS first
+			       FROM users u JOIN comments c ON c.user_id = u.id
+			       WHERE u.name_key = ? AND u.erased_at IS NULL AND u.is_banned = 0
+			         AND c.status = 'approved' AND c.deleted_at IS NULL
+			       GROUP BY u.id
+			       HAVING MAX(c.created_at) >= ?)`,
+		)
+		.bind(key, now - NAME_CLAIM_WINDOW_MS)
+		.first<{ signed: number | null; anon: number | null }>();
+	if (row?.signed == null) return false;
+	return row.anon == null || row.signed < row.anon;
 };
 
 /**
@@ -432,10 +564,10 @@ export const upsertOauthUser = async (
 		await db
 			.prepare(
 				`UPDATE users
-				    SET name = ?, avatar_url = ?
+				    SET name = ?, name_key = ?, avatar_url = ?
 				  WHERE id = ?`,
 			)
-			.bind(name, avatar_url, existing.id)
+			.bind(name, nameKey(name), avatar_url, existing.id)
 			.run();
 		return toUser({
 			...existing,
@@ -451,11 +583,11 @@ export const upsertOauthUser = async (
 	const role: UserRole = shouldPromote ? "admin" : "user";
 	await db
 		.prepare(
-			`INSERT INTO users (id, provider, provider_id, name, email,
+			`INSERT INTO users (id, provider, provider_id, name, name_key, email,
 			                    avatar_url, is_admin, is_banned, role, created_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
 		)
-		.bind(id, provider, provider_id, name, email, avatar_url, is_admin, role, now)
+		.bind(id, provider, provider_id, name, nameKey(name), email, avatar_url, is_admin, role, now)
 		.run();
 	return {
 		id,
@@ -1689,7 +1821,7 @@ export const eraseUserData = async (
 			.prepare(
 				`UPDATE users
 				    SET name = ?, email = NULL, avatar_url = NULL,
-				        provider_id = NULL, erased_at = ?
+				        provider_id = NULL, name_key = NULL, erased_at = ?
 				  WHERE id = ?`,
 			)
 			.bind(placeholderName, now, id),

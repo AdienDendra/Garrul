@@ -35,6 +35,7 @@ export const pl = {
 		"Ten wątek jest zbyt głęboko zagnieżdżony. Odpowiedz wyżej w wątku.",
 	"err.name.required": "Nazwa wyświetlana jest wymagana.",
 	"err.name.too_long": "Nazwa wyświetlana jest za długa (maksymalnie {max} znaków).",
+	"err.name.reserved": "Ta nazwa jest niedostępna dla anonimowych komentarzy. Wybierz inną nazwę lub zaloguj się.",
 	"err.turnstile.required":
 		"Kontrola antyspamowa nie powiodła się. Odśwież stronę i spróbuj ponownie.",
 	"err.turnstile.invalid":

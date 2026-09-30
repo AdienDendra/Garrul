@@ -25,14 +25,16 @@ import {
 	adminInsertSpamVerdict,
 	enqueueModeratorNotification,
 	enqueueNotification,
-	getOrCreateGhost,
 	getComment,
+	getOrCreateCommentGhost,
 	getPinnedThreadRef,
 	getPost,
 	getThreadCreatedAt,
 	getUser,
 	getUserVotesOnComments,
 	insertComment,
+	isIpHashBarred,
+	isNameClaimed,
 	isUserRole,
 	listActiveSubscriptionsForPost,
 	listCommentsForThreads,
@@ -52,6 +54,7 @@ import {
 	type User,
 } from "../db/queries";
 import { allowedPostUrl } from "../lib/cors";
+import { isReservedName, MAX_NAME, nameKey, sanitizeDisplayName } from "../lib/display-name";
 import { identiconSvg } from "../lib/identicon";
 import { sanitizePostTitle } from "../lib/post-title";
 import { clientIp, requireIpHash } from "../lib/ip-hash";
@@ -127,7 +130,6 @@ const comments = new Hono<{
 	Variables: SessionVars & LocaleVars;
 }>();
 
-const MAX_NAME = 40;
 /**
  * Exported for `GET /api/v1/bootstrap`, which embeds this route's tree and so
  * has to accept and reject exactly the same slugs — a divergence there would
@@ -198,17 +200,11 @@ const parsePublishedAt = (raw: number | string | null | undefined): number | nul
 const editWindowMs = (numbers: ResolvedNumbers): number =>
 	numbers.edit_window_minutes * 60_000;
 
-// C0 controls + DEL + C1 controls, matching sanitizePostTitle's range so a name
-// and a title can't disagree about what's storable.
-const NAME_CONTROL_CHARS = new RegExp("[\\u0000-\\u001F\\u007F-\\u009F]", "g");
-
 const validName = (raw: string | undefined): { ok: true; name: string } | { ok: false; key: "err.name.required" | "err.name.too_long"; max?: number } => {
-	// Control characters go first: `.trim()` only removes whitespace, so a name
-	// like "Bob" + U+0001 survived and made the Atom feed not well-formed, which
-	// is a *fatal* XML error — every conforming reader drops the whole document.
-	// feed.ts strips them again at serialization (OAuth display names never come
-	// through here), but a stored name shouldn't carry them in the first place.
-	const name = (raw ?? "").replace(NAME_CONTROL_CHARS, "").trim();
+	// See src/lib/display-name.ts for what is stripped and why; a name that is
+	// nothing but controls or invisible formatting comes back "" and is refused
+	// as empty.
+	const name = sanitizeDisplayName(raw ?? "");
 	if (!name) return { ok: false, key: "err.name.required" };
 	if (name.length > MAX_NAME) return { ok: false, key: "err.name.too_long", max: MAX_NAME };
 	return { ok: true, name };
@@ -567,15 +563,34 @@ comments.post("/", async (c) => {
 		const denied = await enforceWriteBudget();
 		if (denied) return denied;
 
+		// Before the challenge and the ghost insert: a banned IP typing a new
+		// name would otherwise spend a siteverify call and add a users row on
+		// every refused attempt. One banned name bars the whole IP.
+		if (await isIpHashBarred(c.env.DB, ipHash)) {
+			return c.json({ error: t("err.banned") }, 403);
+		}
+
+		// After the budget, so the account lookup can't be driven faster than
+		// one post attempt per window; before the challenge, so a refused name
+		// doesn't spend a siteverify call.
+		if (
+			isReservedName(texts.reserved_names, nameCheck.name) ||
+			(await isNameClaimed(c.env.DB, nameKey(nameCheck.name)))
+		) {
+			return c.json({ error: t("err.name.reserved") }, 400);
+		}
+
 		const bad = await verifyChallenge();
 		if (bad) return bad;
 
-		author = await getOrCreateGhost(c.env.DB, ipHash, nameCheck.name);
+		author = await getOrCreateCommentGhost(c.env.DB, ipHash, nameCheck.name);
 		// Same predicate as the signed-in branch below, so a ghost can't be
 		// gated on a narrower rule than a session user. `resolveActor` documents
 		// why the erased half can't currently fire on a ghost, and why running it
 		// anyway is what keeps that true.
-		if (!isActiveUser(author)) return c.json({ error: t("err.banned") }, 403);
+		if (!isActiveUser(author)) {
+			return c.json({ error: t("err.banned") }, 403);
+		}
 	} else {
 		// Signed-in posts skip the challenge by default. `turnstile_always`
 		// opts out of that: the operator has decided an OAuth account is not

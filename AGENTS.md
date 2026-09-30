@@ -1080,6 +1080,11 @@ is on by default. From the end-user perspective:
 
 1. The user types their **display name** (required; trimmed; capped at
    the server's `MAX_NAME` length) and their comment body in the form.
+   Invisible and bidi-control characters are stripped. A name that the
+   operator reserved, or that a signed-in user has posted under in the last
+   year (unless an anonymous author used it first), is refused with
+   `400 err.name.reserved`; matching ignores case, spaces, `. _ -`,
+   invisible marks and full-width/styled letters.
 2. The widget renders a **Cloudflare Turnstile** challenge alongside
    the submit button. The user solves it (often invisibly).
 3. The widget POSTs `{name, body_md, turnstile_token, ...}` to

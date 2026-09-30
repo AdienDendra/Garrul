@@ -97,6 +97,8 @@ export const EN = {
 
 	// ── A comment ───────────────────────────────────────────────────────────
 	"w.verified": "verified",
+	// Badge tooltip + accessible name; {provider} is a proper noun (GitHub, X…).
+	"w.signed_in_with": "Signed in with {provider}",
 	"w.pinned": "pinned",
 	"w.staff": "Staff",
 	"w.edited": "· edited",

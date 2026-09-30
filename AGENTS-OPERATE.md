@@ -1084,7 +1084,8 @@ the row would orphan every reply written under it. What it clears:
   `provider_id`. That last one is the handle their next login is matched
   on — so a later sign-in creates a **fresh** account instead of
   resurrecting this one. For an anonymous ghost author, `provider_id`
-  *is* the `ip_hash`.
+  is the `ip_hash` (the bare vote/reaction ghost) or `<ip_hash>:<name key>`
+  (a comment ghost — one per name typed on that network).
 - `ip_hash` and `user_agent` on every comment they wrote, and
   `reporter_ip_hash` on every report they filed.
 - Their email subscriptions (plus any queued digest rows) and their
@@ -1140,7 +1141,8 @@ read/write time, no cron, no row migration.
 
 One-click **Ban author** reuses the user-ban mechanism. For an
 anonymous (ghost) author this is a *network-egress* ban keyed on the
-author's `ip_hash`, so behind CGNAT or a shared IP it can catch
+author's `ip_hash`: a ban on any ghost bars every ghost of that
+network, whatever name it types next. Behind CGNAT or a shared IP it can catch
 bystanders — the action confirms before banning. The originating
 comment id is recorded in the audit row's `meta.from_comment`.
 
@@ -1616,6 +1618,21 @@ and needs no `Origin`.
 characters, DB-only, no env var). It replaces the badge text on comments a
 moderator posted as staff. Empty uses each reader's locale string. The widget
 receives it as `staff_badge_label` in `/api/v1/config` (null when unset).
+
+**Reserved names.** Admin → Settings → Moderation → *Reserved names* (one per
+line, `#` comments, DB-only, never sent to the widget). An anonymous commenter
+can't post under a listed name. Separately, and with no setting, an anonymous
+commenter can't post under the name of a signed-in account that holds it. An
+account holds a name while it has an approved, live comment from the last
+year, and only if it used the name before any anonymous author active in that
+same year — so a new sign-up can't take an anonymous regular's name, and a
+name idle for a year is free again. Only comments already public on the page
+count, so the refusal reveals nothing about who has signed in or who is
+staff. Both compare `nameKey` (case, spaces, `. _ -`, default-ignorables and
+NFKC-folded forms), whole names only. Cross-script lookalikes (Cyrillic `К`
+for Latin `K`) are not caught. Names are keyed in `users.name_key` (migration
+0028); the migration backfills an ASCII approximation, and each account gets
+its exact key on its next login.
 
 ### Mount cost and free-tier headroom (since v2.15.0)
 

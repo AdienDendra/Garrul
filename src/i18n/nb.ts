@@ -39,6 +39,7 @@ export const nb = {
 		"Denne tråden er for dypt nøstet. Svar høyere opp i tråden i stedet.",
 	"err.name.required": "Et visningsnavn er påkrevd.",
 	"err.name.too_long": "Visningsnavnet er for langt (maks {max} tegn).",
+	"err.name.reserved": "Dette navnet er ikke tilgjengelig for anonyme kommentarer. Velg et annet navn, eller logg inn.",
 	"err.turnstile.required": "Spamsjekken mislyktes. Last siden på nytt og prøv igjen.",
 	"err.turnstile.invalid": "Spamsjekken mislyktes. Last siden på nytt og prøv igjen.",
 	"err.ratelimit": "For mange kommentarer – ro ned og prøv igjen om litt.",

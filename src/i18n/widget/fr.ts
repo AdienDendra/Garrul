@@ -65,6 +65,7 @@ export const fr = {
 
 	// ── A comment ───────────────────────────────────────────────────────────
 	"w.verified": "vérifié",
+	"w.signed_in_with": "Connecté avec {provider}",
 	"w.pinned": "épinglé",
 	"w.staff": "Équipe",
 	"w.edited": "· modifié",

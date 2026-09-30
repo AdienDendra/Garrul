@@ -74,6 +74,7 @@ export type TextSettingKey =
 	| "spam_blocklist"
 	| "security_contact"
 	| "staff_badge_label"
+	| "reserved_names"
 	| ReactionKindsKey;
 
 export type ResolvedTexts = Record<TextSettingKey, string>;
@@ -407,6 +408,10 @@ const TEXTS: Record<
 	// presentation, set from the Settings page, and a deploy-time default would
 	// cost an env name across every install doc for no operator benefit.
 	staff_badge_label: { default: "", max: STAFF_BADGE_LABEL_MAX },
+	// Names an anonymous commenter may not post under, one per line, on top of
+	// the names signed-in users already post under (isNameClaimed). Empty by
+	// default and DB-only, for the same reasons as staff_badge_label.
+	reserved_names: { default: "" },
 	// Which reaction kinds each surface offers, in render order, as a
 	// comma-separated list of vocabulary kinds (src/widget/reactions.ts).
 	// Stored raw like the rest of this group and normalized at use by

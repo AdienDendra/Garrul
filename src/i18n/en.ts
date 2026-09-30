@@ -10,6 +10,7 @@ export const en = {
 		"This thread is nested too deeply. Reply further up the thread instead.",
 	"err.name.required": "A display name is required.",
 	"err.name.too_long": "Display name is too long (max {max} characters).",
+	"err.name.reserved": "This name is not available for anonymous comments. Choose another name, or sign in.",
 	"err.turnstile.required": "Spam check failed. Refresh and try again.",
 	"err.turnstile.invalid": "Spam check failed. Refresh and try again.",
 	"err.ratelimit": "Too many comments — slow down and try again in a moment.",

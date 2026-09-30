@@ -23,6 +23,7 @@ export const fr = {
 	"err.parent.too_deep": "Ce fil est trop imbriqué. Répondez plus haut dans le fil.",
 	"err.name.required": "Un nom d'affichage est obligatoire.",
 	"err.name.too_long": "Le nom d'affichage est trop long ({max} caractères maximum).",
+	"err.name.reserved": "Ce nom n'est pas disponible pour les commentaires anonymes. Choisissez un autre nom, ou connectez-vous.",
 	"err.turnstile.required":
 		"Échec de la vérification anti-spam. Rechargez la page et réessayez.",
 	"err.turnstile.invalid":

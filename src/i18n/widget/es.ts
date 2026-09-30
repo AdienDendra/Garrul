@@ -63,6 +63,7 @@ export const es = {
 
 	// ── A comment ───────────────────────────────────────────────────────────
 	"w.verified": "verificado",
+	"w.signed_in_with": "Sesión iniciada con {provider}",
 	"w.pinned": "fijado",
 	"w.staff": "Equipo",
 	"w.edited": "· editado",

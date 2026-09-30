@@ -10,6 +10,7 @@
  * suite's.
  */
 import { describe, expect, it } from "vitest";
+import { nameKey } from "../src/lib/display-name";
 import {
 	type ImportAdapter,
 	type SourceAuthor,
@@ -92,7 +93,7 @@ const oneComment = (author: SourceAuthor): SourceExport => exportOf([author]);
 /** The provider_id the core derived, read off the users INSERT. */
 const providerIdFrom = (captured: Captured[]): string => {
 	const insert = captured.find((c) => c.sql.startsWith("INSERT INTO users"));
-	// Bind order: id, provider_id, name, is_banned, created_at, import_source
+	// Bind order: id, provider_id, name, name_key, is_banned, created_at, import_source
 	// ('anon' is a literal).
 	return insert!.binds[1] as string;
 };
@@ -458,12 +459,14 @@ describe("source fidelity mappings", () => {
 		return {
 			captured,
 			// posts:    slug, title, url, created_at, closed
-			// users:    id, provider_id, name, is_banned, created_at, import_source
+			// users:    id, provider_id, name, name_key, is_banned, created_at,
+			//           import_source
 			// comments: id, post_slug, user_id, body_md, body_html,
 			//           renderer_version, status, created_at, edited_at,
 			//           import_source, import_id
 			closed: find("posts")?.binds[4],
-			banned: find("users")?.binds[3],
+			nameKey: find("users")?.binds[3],
+			banned: find("users")?.binds[4],
 			editedAt: find("comments")?.binds[8],
 		};
 	};
@@ -488,6 +491,11 @@ describe("source fidelity mappings", () => {
 
 	it("leaves users.is_banned at 0 when the source does not say", async () => {
 		expect((await importOf(exportOf([AUTHOR]))).banned).toBe(0);
+	});
+
+	it("keys the ghost's name so it keeps first-use precedence", async () => {
+		const got = await importOf(exportOf([{ ...AUTHOR, name: "Al Ice" }]));
+		expect(got.nameKey).toBe(nameKey("Al Ice"));
 	});
 
 	it("bans the ghost if any one of the author's comments reports it", async () => {

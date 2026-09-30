@@ -62,12 +62,12 @@ describe("GitHub profile", () => {
 });
 
 describe("Facebook, X and Discord profiles", () => {
-	it("reads Facebook's picture and falls back to the email for a name", async () => {
+	it("reads Facebook's picture and never publishes the email as a name", async () => {
 		serve({ "graph.facebook.com": [200, { id: "fb1", email: "f@example.com", picture: { data: { url: "https://p.example/f" } } }] });
 		expect(await PROVIDERS.facebook.fetch_profile("tok")).toEqual({
 			provider_id: "fb1",
 			email: "f@example.com",
-			name: "f@example.com",
+			name: "user",
 			avatar_url: "https://p.example/f",
 		});
 		serve({ "graph.facebook.com": [500, {}] });
@@ -104,5 +104,28 @@ describe("Facebook, X and Discord profiles", () => {
 		expect(await PROVIDERS.discord.fetch_profile("tok")).toMatchObject({ email: null, name: "testduser", avatar_url: null });
 		serve({ "discord.com": [401, {}] });
 		await expect(PROVIDERS.discord.fetch_profile("tok")).rejects.toThrow("discord me 401");
+	});
+});
+
+describe("display names", () => {
+	it("falls back to Google's given_name, then 'user', never the email", async () => {
+		serve({ "openidconnect.googleapis.com": [200, { sub: "g1", email: "g@example.com", email_verified: true, given_name: "Gee" }] });
+		expect(await PROVIDERS.google.fetch_profile("tok")).toMatchObject({ name: "Gee", email: "g@example.com" });
+		serve({ "openidconnect.googleapis.com": [200, { sub: "g2", email: "g@example.com", email_verified: false }] });
+		expect(await PROVIDERS.google.fetch_profile("tok")).toMatchObject({ name: "user", email: null });
+	});
+
+	it("sanitizes and caps a provider name like a typed one", async () => {
+		serve({ "discord.com": [200, { id: "d3", username: "example-fallback", global_name: "‮​", verified: false }] });
+		expect(await PROVIDERS.discord.fetch_profile("tok")).toMatchObject({ name: "example-fallback" });
+		serve({ "discord.com": [200, { id: "d4", username: "example-user", global_name: `Ev‮il ${"x".repeat(60)}`, verified: false }] });
+		const { name } = await PROVIDERS.discord.fetch_profile("tok");
+		expect(name.startsWith("Evil x")).toBe(true);
+		expect(name.length).toBeLessThanOrEqual(40);
+	});
+
+	it("falls through when the cut leaves nothing visible", async () => {
+		serve({ "discord.com": [200, { id: "d5", username: "example-user", global_name: `${"‍".repeat(40)}Example`, verified: false }] });
+		expect(await PROVIDERS.discord.fetch_profile("tok")).toMatchObject({ name: "example-user" });
 	});
 });

@@ -40,6 +40,7 @@ export const ja = {
 		"このスレッドは階層が深すぎます。もう少し上の階層で返信してください。",
 	"err.name.required": "表示名を入力してください。",
 	"err.name.too_long": "表示名が長すぎます（最大{max}文字）。",
+	"err.name.reserved": "この名前は匿名コメントでは使用できません。別の名前を選ぶか、サインインしてください。",
 	"err.turnstile.required":
 		"スパムチェックに失敗しました。ページを再読み込みしてもう一度お試しください。",
 	"err.turnstile.invalid":

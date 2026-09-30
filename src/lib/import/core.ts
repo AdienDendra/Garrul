@@ -33,6 +33,7 @@
  *   * Ghost users created here cannot authenticate (provider is 'anon', no
  *     OAuth identity).
  */
+import { nameKey } from "../display-name";
 import { CURRENT_RENDERER_VERSION, renderMarkdown } from "../markdown";
 import { sanitizePostTitle } from "../post-title";
 import { SLUG_RE } from "../slug";
@@ -694,10 +695,10 @@ export const runImport = async (
 		for (const u of usersToInsert.values()) {
 			await db
 				.prepare(
-					`INSERT INTO users (id, provider, provider_id, name, email,
+					`INSERT INTO users (id, provider, provider_id, name, name_key, email,
 					                    avatar_url, is_admin, is_banned, created_at,
 					                    import_source)
-					 VALUES (?, 'anon', ?, ?, NULL, NULL, 0, ?, ?, ?)`,
+					 VALUES (?, 'anon', ?, ?, ?, NULL, NULL, 0, ?, ?, ?)`,
 				)
 				// is_banned is written on INSERT only. The branch above returns early
 				// for a user who already exists, and deliberately: that row may be a
@@ -708,6 +709,7 @@ export const runImport = async (
 					u.id,
 					u.provider_id,
 					u.name,
+					nameKey(u.name),
 					u.is_banned ? 1 : 0,
 					now,
 					adapter.source,

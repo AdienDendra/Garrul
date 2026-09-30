@@ -24,6 +24,7 @@ export const es = {
 		"Este hilo está demasiado anidado. Responde más arriba en el hilo.",
 	"err.name.required": "Es necesario un nombre visible.",
 	"err.name.too_long": "El nombre visible es demasiado largo (máximo {max} caracteres).",
+	"err.name.reserved": "Este nombre no está disponible para comentarios anónimos. Elige otro nombre o inicia sesión.",
 	"err.turnstile.required":
 		"La comprobación antispam ha fallado. Recarga la página e inténtalo de nuevo.",
 	"err.turnstile.invalid":

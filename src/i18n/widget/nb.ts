@@ -82,6 +82,7 @@ export const nb = {
 
 	// ── A comment ───────────────────────────────────────────────────────────
 	"w.verified": "verifisert",
+	"w.signed_in_with": "Logget inn med {provider}",
 	"w.edited": "· redigert",
 	"w.pending": "Venter på godkjenning",
 	"w.removed_by_mod": "[fjernet av en moderator]",

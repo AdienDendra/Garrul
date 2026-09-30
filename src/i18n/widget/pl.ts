@@ -96,6 +96,7 @@ export const pl = {
 
 	// ── A comment ───────────────────────────────────────────────────────────
 	"w.verified": "zweryfikowany",
+	"w.signed_in_with": "Zalogowano przez {provider}",
 	"w.edited": "· edytowany",
 	"w.pending": "Oczekuje na zatwierdzenie",
 	"w.removed_by_mod": "[usunięty przez moderatora]",

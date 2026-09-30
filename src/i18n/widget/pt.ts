@@ -98,6 +98,7 @@ export const pt = {
 
 	// ── A comment ───────────────────────────────────────────────────────────
 	"w.verified": "verificado",
+	"w.signed_in_with": "Sessão iniciada com {provider}",
 	"w.pinned": "fixado",
 	"w.staff": "Equipe",
 	"w.edited": "· editado",

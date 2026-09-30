@@ -89,6 +89,7 @@ export const ja = {
 
 	// ── A comment ───────────────────────────────────────────────────────────
 	"w.verified": "確認済み",
+	"w.signed_in_with": "{provider} でサインイン済み",
 	"w.pinned": "固定",
 	"w.staff": "スタッフ",
 	"w.edited": "· 編集済み",

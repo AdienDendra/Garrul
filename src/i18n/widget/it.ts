@@ -84,6 +84,7 @@ export const it = {
 
 	// ── A comment ───────────────────────────────────────────────────────────
 	"w.verified": "verificato",
+	"w.signed_in_with": "Accesso effettuato con {provider}",
 	"w.pinned": "fissato",
 	"w.staff": "Staff",
 	"w.edited": "· modificato",

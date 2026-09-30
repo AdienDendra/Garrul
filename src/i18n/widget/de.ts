@@ -66,6 +66,7 @@ export const de = {
 
 	// ── A comment ───────────────────────────────────────────────────────────
 	"w.verified": "verifiziert",
+	"w.signed_in_with": "Angemeldet mit {provider}",
 	"w.pinned": "angeheftet",
 	"w.staff": "Team",
 	"w.edited": "· bearbeitet",

@@ -2437,9 +2437,7 @@ const buildComment = (n: TreeNode, ctx: WidgetCtx): HTMLElement => {
 	const nameEl = el("span", "gr-name", n.author.name);
 	nameEl.id = nameId;
 	meta.appendChild(nameEl);
-	if (n.author.provider !== "anon") {
-		meta.appendChild(el("span", "gr-verified", s("w.verified")));
-	}
+	if (n.author.provider !== "anon") meta.appendChild(verifiedBadge(n.author.provider));
 	if (n.pinned) meta.appendChild(el("span", "gr-pinned", s("w.pinned")));
 	// textContent via el(): the label is operator text and never parsed as HTML.
 	if (n.staff) meta.appendChild(el("span", "gr-staff", staffLabel ?? s("w.staff")));
@@ -2703,6 +2701,29 @@ const PROVIDER_LABELS: Record<OAuthProvider, string> = {
 	discord: "Discord",
 };
 
+/**
+ * The signed-in badge: "✓ GitHub" rather than "verified". Signing in proves an
+ * account exists at that provider, not who owns it — anyone can register a
+ * GitHub account under someone else's name — so the badge names what was
+ * checked. The full sentence is the accessible name and the tooltip; the
+ * visible provider name is hidden from assistive tech so it isn't read twice.
+ * A provider this widget build doesn't know keeps the generic word.
+ */
+const verifiedBadge = (provider: string): HTMLElement => {
+	const label = Object.prototype.hasOwnProperty.call(PROVIDER_LABELS, provider)
+		? PROVIDER_LABELS[provider as OAuthProvider]
+		: null;
+	if (!label) return el("span", "gr-verified", s("w.verified"));
+	const badge = el("span", "gr-verified");
+	const sentence = s("w.signed_in_with", { provider: label });
+	badge.title = sentence;
+	badge.appendChild(el("span", "gr-sr", sentence));
+	const visible = el("span", undefined, label);
+	visible.setAttribute("aria-hidden", "true");
+	badge.appendChild(visible);
+	return badge;
+};
+
 const buildAuthBlock = (
 	me: Me,
 	apiBase: string,
@@ -2719,9 +2740,7 @@ const buildAuthBlock = (
 		if (before) wrap.appendChild(el("span", undefined, before));
 		wrap.appendChild(el("span", "gr-signed-name", `@${me.name}`));
 		if (after) wrap.appendChild(el("span", undefined, after));
-		if (me.provider !== "anon") {
-			wrap.appendChild(el("span", "gr-verified", s("w.verified")));
-		}
+		if (me.provider !== "anon") wrap.appendChild(verifiedBadge(me.provider));
 		const out = el("button", undefined, s("w.sign_out"));
 		out.type = "button";
 		out.addEventListener("click", async () => {

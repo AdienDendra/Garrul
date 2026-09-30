@@ -80,6 +80,7 @@ export const nl = {
 
 	// ── A comment ───────────────────────────────────────────────────────────
 	"w.verified": "geverifieerd",
+	"w.signed_in_with": "Ingelogd met {provider}",
 	"w.pinned": "vastgezet",
 	"w.staff": "Team",
 	"w.edited": "· bewerkt",

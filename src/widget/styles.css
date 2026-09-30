@@ -510,6 +510,12 @@ button:active:not([disabled]) { opacity: 0.75; }
 	padding: 0.05em 0.4em;
 	border-radius: 999px;
 }
+/* Check mark via CSS: no SVG bytes in the bundle, and the empty alt text after
+   the slash keeps screen readers from announcing "check mark" before the
+   badge's own accessible sentence. Behind @supports because a browser that
+   doesn't know the alt-text form drops the whole declaration. */
+.gr-verified::before { content: "✓\00a0"; font-weight: 700; }
+@supports (content: "x" / "") { .gr-verified::before { content: "✓\00a0" / ""; } }
 .gr-time { color: var(--gr-muted); font-size: 0.85em; }
 .gr-edited { color: var(--gr-muted); font-size: 0.85em; font-style: italic; }
 /* The permalink wraps the timestamp, so it must read as metadata, not as a

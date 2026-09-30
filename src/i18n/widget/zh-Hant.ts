@@ -55,6 +55,7 @@ export const zhHant = {
 
 	// ── A comment ───────────────────────────────────────────────────────────
 	"w.verified": "已驗證",
+	"w.signed_in_with": "已透過 {provider} 登入",
 	"w.pinned": "置頂",
 	"w.staff": "工作人員",
 	"w.edited": "· 已編輯",

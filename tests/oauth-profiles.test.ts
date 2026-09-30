@@ -123,4 +123,9 @@ describe("display names", () => {
 		expect(name.startsWith("Evil x")).toBe(true);
 		expect(name.length).toBeLessThanOrEqual(40);
 	});
+
+	it("falls through when the cut leaves nothing visible", async () => {
+		serve({ "discord.com": [200, { id: "d5", username: "example-user", global_name: `${"‍".repeat(40)}Example`, verified: false }] });
+		expect(await PROVIDERS.discord.fetch_profile("tok")).toMatchObject({ name: "example-user" });
+	});
 });

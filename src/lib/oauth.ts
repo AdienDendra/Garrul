@@ -83,7 +83,9 @@ type ProviderConfig = {
  */
 const profileName = (...candidates: (string | null | undefined)[]): string => {
 	for (const c of candidates) {
-		const name = truncateName(sanitizeDisplayName(c ?? ""));
+		// Sanitized again after the cut: 40 ZWJs ahead of a real name pass the
+		// first check but truncate to nothing visible.
+		const name = sanitizeDisplayName(truncateName(sanitizeDisplayName(c ?? "")));
 		if (name) return name;
 	}
 	return "user";

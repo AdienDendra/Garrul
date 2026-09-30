@@ -116,9 +116,9 @@ describe("display names", () => {
 	});
 
 	it("sanitizes and caps a provider name like a typed one", async () => {
-		serve({ "discord.com": [200, { id: "d3", username: "fallback", global_name: "‮​", verified: false }] });
-		expect(await PROVIDERS.discord.fetch_profile("tok")).toMatchObject({ name: "fallback" });
-		serve({ "discord.com": [200, { id: "d4", username: "u", global_name: `Ev‮il ${"x".repeat(60)}`, verified: false }] });
+		serve({ "discord.com": [200, { id: "d3", username: "example-fallback", global_name: "‮​", verified: false }] });
+		expect(await PROVIDERS.discord.fetch_profile("tok")).toMatchObject({ name: "example-fallback" });
+		serve({ "discord.com": [200, { id: "d4", username: "example-user", global_name: `Ev‮il ${"x".repeat(60)}`, verified: false }] });
 		const { name } = await PROVIDERS.discord.fetch_profile("tok");
 		expect(name.startsWith("Evil x")).toBe(true);
 		expect(name.length).toBeLessThanOrEqual(40);

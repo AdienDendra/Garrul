@@ -463,6 +463,29 @@ export const isIpHashBarred = async (
 };
 
 /**
+ * Whether `userId` is one of this ip_hash's ghosts — the bare one or any
+ * per-name comment ghost. An anonymous voter resolves to the bare ghost while
+ * their comments sit on a per-name one, so `userId === comment.user_id` alone
+ * no longer catches an anonymous self-vote. Keys on `provider_id`, not
+ * `comments.ip_hash`, which the retention sweep clears.
+ */
+export const isGhostOfIpHash = async (
+	db: D1Database,
+	userId: string,
+	ipHash: string,
+): Promise<boolean> => {
+	const row = await db
+		.prepare(
+			`SELECT 1 AS hit FROM users
+			 WHERE id = ? AND provider = 'anon'
+			   AND (provider_id = ? OR (provider_id >= ? AND provider_id < ?))`,
+		)
+		.bind(userId, ipHash, `${ipHash}:`, `${ipHash};`)
+		.first<{ hit: number }>();
+	return row !== null;
+};
+
+/**
  * Whether a signed-in account already posts publicly under this name key, so
  * an anonymous commenter may not take it. Only accounts with a live approved
  * comment count: matching every account would let anyone probe which names

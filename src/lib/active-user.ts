@@ -86,11 +86,11 @@ export const isActiveUser = (user: User): boolean =>
 export const resolveActor = async (
 	c: ActorCtx,
 	ipHash: string,
-): Promise<{ ok: true; userId: string } | { ok: false }> => {
+): Promise<{ ok: true; userId: string; anon: boolean } | { ok: false }> => {
 	const session = await readSession(c);
 	if (session) {
 		const user = await requireActiveUser(c.env.DB, session.user_id);
-		return user ? { ok: true, userId: user.id } : { ok: false };
+		return user ? { ok: true, userId: user.id, anon: false } : { ok: false };
 	}
 	const ghost = await getOrCreateGhost(c.env.DB, ipHash, "anon");
 	// A ban on any of this IP's per-name comment ghosts bars it here too — the
@@ -98,7 +98,7 @@ export const resolveActor = async (
 	if (!isActiveUser(ghost) || (await isIpHashBarred(c.env.DB, ipHash))) {
 		return { ok: false };
 	}
-	return { ok: true, userId: ghost.id };
+	return { ok: true, userId: ghost.id, anon: true };
 };
 
 /**

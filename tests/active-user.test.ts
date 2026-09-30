@@ -181,7 +181,7 @@ describe("requireActiveUser", () => {
 describe("resolveActor", () => {
 	it("attributes an active session to its user", async () => {
 		const actor = await resolveActor(makeCtx(ACTIVE_SID), IP_HASH);
-		expect(actor).toEqual({ ok: true, userId: ACTIVE_ID });
+		expect(actor).toEqual({ ok: true, userId: ACTIVE_ID, anon: false });
 	});
 
 	it("rejects a banned session instead of downgrading it to a ghost", async () => {

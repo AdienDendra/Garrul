@@ -63,15 +63,22 @@ export const truncateName = (name: string, max = MAX_NAME): string => {
  * "𝐊𝐢𝐧𝐠𝐏𝐢𝐧") onto plain ones, then case, whitespace, format characters and the
  * separators people use to make a near-copy ("King.Pin", "king_pin") are dropped.
  *
+ * Default-ignorables (ZWJ, variation selectors, U+034F…) go *before* NFKC, or
+ * "Jose\u200D\u0301" keeps a loose accent that never composes into "josé";
+ * the closing NFKC recomposes what dropping a separator split apart. Only the
+ * key loses them — the stored name keeps its emoji presentation and joiners.
+ *
  * ponytail: no cross-script confusables (Cyrillic "К" vs Latin "K"). That needs
  * the Unicode confusables table (~100 KB); add it if impersonation via
  * homoglyphs shows up in practice.
  */
 export const nameKey = (name: string): string =>
 	sanitizeDisplayName(name)
+		.replace(/\p{Default_Ignorable_Code_Point}/gu, "")
 		.normalize("NFKC")
 		.toLowerCase()
-		.replace(/[\s\p{Cf}._\-·'’]/gu, "");
+		.replace(/[\s\p{Cf}._\-·'’]/gu, "")
+		.normalize("NFKC");
 
 /**
  * Whether `name` is on the operator's reserved-names list: one name per line,

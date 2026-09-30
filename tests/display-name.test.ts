@@ -78,8 +78,16 @@ describe("nameKey", () => {
 		}
 	});
 
-	it("keeps different names different", () => {
+	it("drops default-ignorables before normalizing", () => {
+		expect(nameKey("Admin️")).toBe("admin");
+		expect(nameKey("Ad͏min")).toBe("admin");
+		expect(nameKey("Jose‍́")).toBe(nameKey("José"));
+		expect(nameKey("Jose.́")).toBe(nameKey("José"));
+	});
+
+	it("keeps accents and different names different", () => {
 		expect(nameKey("KingPin")).not.toBe(nameKey("KingPins"));
+		expect(nameKey("José")).not.toBe(nameKey("Jose"));
 	});
 });
 

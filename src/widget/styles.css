@@ -491,12 +491,16 @@ button:active:not([disabled]) { opacity: 0.75; }
 	border-inline-start: 2px solid var(--gr-accent);
 	padding-inline-start: 0.6rem;
 }
-.gr-comment[data-flat="1"] .gr-flatten { font-size: 0.85em; color: var(--gr-muted); margin-inline-end: 0.3em; }
+.gr-comment[data-flat="1"] .gr-flatten { font-size: 0.85em; color: var(--gr-muted); margin-inline-end: 0.3em; unicode-bidi: isolate; overflow-wrap: anywhere; }
 .gr-avatar { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; overflow: hidden; background: var(--gr-surface); box-shadow: 0 0 0 1px var(--gr-border); }
 .gr-avatar svg, .gr-avatar img { width: 100%; height: 100%; display: block; }
 .gr-main { flex: 1; min-width: 0; }
 .gr-meta { display: flex; gap: 0.5rem; align-items: baseline; flex-wrap: wrap; }
-.gr-name { font-weight: 600; }
+/* Names are user text. `isolate` keeps an RTL name (or a bidi control that
+   predates the server-side strip) from reordering the badge and timestamp
+   beside it; `anywhere` lets a 40-character unbroken name wrap inside the
+   flex row instead of pushing it wider than the thread. */
+.gr-name { font-weight: 600; unicode-bidi: isolate; overflow-wrap: anywhere; min-width: 0; }
 .gr-verified,
 .gr-pinned,
 .gr-staff {

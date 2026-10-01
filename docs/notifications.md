@@ -13,7 +13,7 @@ the alerts somewhere other than an inbox.
 | Channel | Reaches | Fires when | To turn on |
 | --- | --- | --- | --- |
 | **Reply notifications** (email) | readers who opted in on your site | a new comment is approved on a thread they subscribed to | a Resend API key, a verified sender address, and the cron that already ships in `wrangler.example.toml` |
-| **Moderator email** | you, at `ADMIN_EMAILS` (or a shared alias) | a comment lands in the moderation queue, or a reader reports one | the same Resend setup, plus one switch in *Settings → Moderation* |
+| **Operator email** | you, at `ADMIN_EMAILS` (or a shared alias) | every new comment, whether published or held for review, plus reports | the same Resend setup, plus one switch in *Settings → Moderation* |
 | **Webhook out** | any HTTPS endpoint you control — including Slack, Discord and Telegram adapters | every comment event: `comment.posted`, `.edited`, `.deleted`, `.approved`, `.spam`, `.reported` | a URL and a shared secret in the admin UI — see [`webhooks.md`](webhooks.md) |
 | **Telegram operator bot** | you, on your phone, with approve/spam/delete buttons inline | a comment needs moderation; plus `/queue`, `/stats` on demand | a bot token and a webhook secret — see [`telegram.md`](telegram.md) |
 
@@ -139,22 +139,22 @@ you see in `wrangler tail` when a cap trips:
 Resend's free tier is 100 emails/day, which most instances will hit before any
 Garrul limit.
 
-## Moderator email
+## Operator email
 
-The counterpart to the above: readers hear when a comment is **approved**,
-you hear when one **isn't**. The two are exact inverses, so a comment never
-notifies both audiences.
+This is the site-wide safety net for the operator: every accepted comment is
+included whether it publishes immediately or lands in moderation. Reader
+subscriptions remain thread-scoped and independent, so an operator can receive
+the site-wide digest while readers receive updates only for posts they follow.
 
 ### What triggers one
 
-- A comment lands in the moderation queue instead of publishing — held by the
-  anti-spam verdict, first-comment moderation, or `moderation_mode`.
+- Any new comment is accepted. Its live status in the digest says whether it
+  was published or held for review.
 - A reader files the **first** report on a comment. Later reports on the same
   comment don't re-mail you; a second email about something you've already been
   told about is exactly the noise that gets moderator mail filtered away.
 
-Both reasons can be live for the same comment, and one digest carries both,
-labelled.
+New-comment and report notifications can share one digest and are labelled.
 
 ### Turning it on
 
@@ -165,13 +165,13 @@ domain's reputation.
 1. Configure email exactly as above (`EMAIL_PROVIDER`, `EMAIL_FROM`,
    `RESEND_API_KEY`, `PUBLIC_BASE_URL`). Without it this is a silent no-op —
    nothing errors, nothing queues.
-2. Flip **Email me about the queue** in *Settings → Moderation*, or set
+2. Flip **Email me about every comment** in *Settings → Moderation*, or set
    `MODERATOR_EMAIL_ENABLED = "true"` in `wrangler.toml`. The setting wins over
    the env var, so you can silence it mid-incident without a deploy.
 
-Recipients default to `ADMIN_EMAILS` — already exactly the set of people who can
-act on what the mail is about. Set `MODERATOR_NOTIFY_EMAILS` (comma-separated)
-only if the alerts belong somewhere else, such as a shared `moderation@` alias.
+Recipients default to `ADMIN_EMAILS`. Set `MODERATOR_NOTIFY_EMAILS`
+(comma-separated) only if alerts belong somewhere else, such as a shared
+`moderation@` alias.
 
 ### The mechanism
 
@@ -181,8 +181,8 @@ Same shape as the reader digest, and the same cron:
   25 emails. Queue depth changes the digest's length, never the number of sends.
 - **Up to 25 comments per tick.** The overflow isn't lost — it goes out on the
   next tick.
-- Anything you **already handled** inside that window is dropped silently. If
-  you approved the comment before the tick fired, no email mentions it.
+- Approval during the debounce window does not remove a new-comment notice; it
+  is rendered as published. A comment deleted before the tick is dropped.
 - **Failures stay pending** and the next tick retries.
 - Comment bodies are re-sanitized with `sanitizeForEmail`, same as the reader
   digest.
@@ -206,5 +206,5 @@ order: the sender domain isn't verified in Resend; `PUBLIC_BASE_URL` still
 points at the example domain, so confirm links 404; or the `[triggers]` block
 was removed and nothing is flushing either queue.
 
-If reader digests arrive but moderator mail doesn't, the switch is the thing to
-check — it's off until you turn it on, and it's off *silently*.
+If reader digests arrive but operator mail doesn't, check the switch — it is off
+until you turn it on, and it is off *silently*.

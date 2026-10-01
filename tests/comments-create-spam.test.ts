@@ -192,7 +192,23 @@ describe("POST /comments — who hears about a new comment", () => {
 		expect(sqlite.prepare("SELECT COUNT(*) AS n FROM moderator_notifications").get()).toEqual({ n: 0 });
 	});
 
-	it("tells moderators, not subscribers, about a held comment when moderator email is on", async () => {
+	it("also queues an operator notice for an approved comment when email is on", async () => {
+		subscribe("s-other", "other@example.com", 1);
+		const res = await post(
+			{ body: "hello operator and subscribers" },
+			{ MODERATOR_EMAIL_ENABLED: "true" },
+		);
+		expect(res.status).toBe(201);
+		await Promise.all(pending);
+		expect(sqlite.prepare("SELECT reason FROM moderator_notifications").all()).toEqual([
+			{ reason: "posted" },
+		]);
+		expect(sqlite.prepare("SELECT subscription_id FROM notifications").all()).toEqual([
+			{ subscription_id: "s-other" },
+		]);
+	});
+
+	it("tells operators, not subscribers, about a held comment when operator email is on", async () => {
 		subscribe("s-other", "other@example.com", 1);
 		const res = await post(
 			{ body: "cheap pills here" },
@@ -201,12 +217,12 @@ describe("POST /comments — who hears about a new comment", () => {
 		expect(res.status).toBe(201);
 		await Promise.all(pending);
 		expect(sqlite.prepare("SELECT reason FROM moderator_notifications").all()).toEqual([
-			{ reason: "pending" },
+			{ reason: "posted" },
 		]);
 		expect(sqlite.prepare("SELECT COUNT(*) AS n FROM notifications").get()).toEqual({ n: 0 });
 	});
 
-	it("writes no moderator row for a held comment when moderator email is off", async () => {
+	it("writes no operator row for a held comment when operator email is off", async () => {
 		await post({ body: "cheap pills here" }, aiSaying("SPAM"));
 		await Promise.all(pending);
 		expect(sqlite.prepare("SELECT COUNT(*) AS n FROM moderator_notifications").get()).toEqual({ n: 0 });

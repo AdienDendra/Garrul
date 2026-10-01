@@ -794,18 +794,21 @@ comments.post("/", async (c) => {
 		// extra ms beats silent data loss.
 		if (c.executionCtx) c.executionCtx.waitUntil(fanout);
 		else await fanout;
-	} else if (flags.moderator_email_enabled) {
-		// The exact inverse of the branch above, and that is the whole design:
-		// a comment either reaches readers or reaches the queue, so subscribers
-		// and moderators are never notified about the same event. Gated on the
-		// flag so an instance with moderator email off writes no rows at all
-		// rather than filling a queue nothing drains.
-		//
-		// Same waitUntil-or-await reasoning as the fan-out: without an
-		// executionCtx the runtime may cancel the promise once the response
-		// settles, and a lost row here means a spam comment sits in the queue
-		// with nobody told about it.
-		const notify = enqueueModeratorNotification(c.env.DB, inserted.id, "pending");
+	}
+
+	// Operator mail is deliberately independent of subscriber mail. When the
+	// flag is enabled, every accepted comment gets one operator notification,
+	// whether it published immediately or landed in the moderation queue. The
+	// live status is joined when the digest renders, so the email can distinguish
+	// "published" from "held for review" without creating two queue rows for a
+	// pending comment.
+	//
+	// Same waitUntil-or-await reasoning as the subscriber fan-out: without an
+	// executionCtx the runtime may cancel the promise once the response settles,
+	// and a lost row here is exactly the silent notification gap this feature is
+	// meant to prevent.
+	if (flags.moderator_email_enabled) {
+		const notify = enqueueModeratorNotification(c.env.DB, inserted.id, "posted");
 		if (c.executionCtx) c.executionCtx.waitUntil(notify);
 		else await notify;
 	}

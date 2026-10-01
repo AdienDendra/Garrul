@@ -27,8 +27,9 @@ dashboard page); every other integration is optional.
   widget, confirm by double opt-in, get a debounced digest, and leave in
   one click from Gmail's own Unsubscribe button. Bring a Resend key
   ([`docs/notifications.md`](docs/notifications.md))
-- **Moderator notifications by email**: a digest of what's queued or
-  reported. Off by default; one switch in *Settings → Moderation*
+- **Operator notifications by email**: a digest of every new comment,
+  including comments held for review, plus reports. Off by default; one
+  switch in *Settings → Moderation*
 - **Layered anti-spam**: Turnstile, rate limiting and a strict markdown
   sanitizer always on, four tunable heuristics and an optional classifier
   on top, everything routed to the queue

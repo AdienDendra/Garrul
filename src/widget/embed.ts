@@ -1684,7 +1684,7 @@ const buildSubscribeBell = (
 	};
 
 	if (!managed) {
-		emailInput.className = "gr-email-input";
+		emailInput.className = "gr-subscribe-email";
 		emailInput.type = "email";
 		emailInput.disabled = true;
 		emailInput.placeholder = s("w.email_ph");
@@ -2815,10 +2815,6 @@ const buildForm = (
 	turnstileAlways: boolean,
 	// Session role is mod/admin: offer the opt-in staff box. The server re-checks.
 	staffEligible: boolean,
-	// Thread subscription belongs beside the primary action when comments are
-	// open. It is built by the caller because the same control remains available
-	// in the thread toolbar when a post is read-only.
-	subscribeControl: HTMLElement | null,
 ): HTMLFormElement => {
 	const form = document.createElement("form");
 	form.className = "gr-form";
@@ -2922,7 +2918,6 @@ const buildForm = (
 	const submit = el("button", "gr-submit-btn", s("w.post_comment"));
 	submit.type = "submit";
 	actions.appendChild(submit);
-	if (subscribeControl) actions.appendChild(subscribeControl);
 
 	const errBox = statusBox("gr-error is-inline");
 
@@ -3936,9 +3931,6 @@ const loadOnce = async (
 
 	const wrap = el("div", "gr-root");
 	const ctx = makeCtx(me, acceptingComments, closedReason);
-	const subscribeControl = subscriptionsEnabled
-		? buildSubscribeBell(apiBase, slug, me?.email ?? null, ctx.seed)
-		: null;
 	// Publish it for `submit()`, which is wired to a composer built before this
 	// context existed. See `mountCtx`.
 	mountCtx.set(root, ctx);
@@ -3958,7 +3950,6 @@ const loadOnce = async (
 		me?.email ?? null,
 		turnstileAlways,
 		isStaff(me),
-		acceptingComments ? subscribeControl : null,
 	);
 	// Restore/persist the top-level composer draft (cleared on successful post
 	// in submit()). Reply-form drafts are wired separately in buildReplyForm.
@@ -3991,16 +3982,15 @@ const loadOnce = async (
 		wrap.appendChild(el("p", "gr-empty", closedNotice(closedReason)));
 	}
 
-	// Thread toolbar: sorting lives above the thread. On an open post the
-	// subscription bell now sits beside Post comment; on a closed post there is
-	// no composer, so the same control remains available here.
+	// Thread toolbar: sorting lives above the thread. This custom surface keeps
+	// notification opt-in inside the comment form, so no separate subscribe bell
+	// is rendered here.
 	// Chronological order needs no scores, so the selector is no longer gated on
 	// voting — only on there being something to sort. A post with no comments
 	// used to render "Sort by" over "No comments yet" wherever voting was on;
 	// ungating without this check would have spread that to every install.
 	const showSort = data.threads.length > 0;
-	const toolbarSubscribe = acceptingComments ? null : subscribeControl;
-	if (showSort || toolbarSubscribe) {
+	if (showSort) {
 		const bar = el("div", "gr-threadbar");
 		if (showSort) {
 			const sortWrap = el("div", "gr-sort");
@@ -4042,7 +4032,6 @@ const loadOnce = async (
 			});
 			bar.appendChild(sortWrap);
 		}
-		if (toolbarSubscribe) bar.appendChild(toolbarSubscribe);
 		wrap.appendChild(bar);
 	}
 

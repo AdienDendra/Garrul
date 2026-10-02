@@ -408,12 +408,33 @@ button:active:not([disabled]) { opacity: 0.75; }
    explicit dimensions and an iframe is a replaced element, so its box is
    reserved at appendChild rather than at load. */
 .gr-turnstile:empty { display: none; }
+.gr-turnstile:not(:empty) {
+	position: relative;
+	width: 300px;
+	height: 70px;
+}
+/* Turnstile's normal widget is 300x65 and paints its own opaque 1px frame
+   inside a cross-origin iframe, so its border cannot inherit our theme tokens.
+   Clip only that outer pixel, then redraw the frame with Garrul's subdued
+   border. The overlay never handles input; the challenge remains fully
+   interactive underneath it. */
+.gr-turnstile:not(:empty)::after {
+	content: "";
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 300px;
+	height: 65px;
+	border: 1px solid var(--gr-border);
+	pointer-events: none;
+}
 .gr-turnstile-frame {
 	border: 0;
 	width: 300px;
 	height: 70px;
 	display: block;
 	color-scheme: light dark;
+	clip-path: inset(1px 1px 6px 1px);
 }
 .gr-form-actions {
 	display: flex;

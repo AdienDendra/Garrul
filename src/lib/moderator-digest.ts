@@ -1,18 +1,19 @@
 /**
- * Moderator notification digest.
+ * Operator notification digest.
  *
  * A sibling to digest.ts, not a fifth responsibility inside it: that one answers
  * "what did readers of this thread miss", groups by subscriber and renders in
- * each subscriber's own locale. This one answers "what is waiting for you in the
- * queue", goes to a fixed operator list, and is English-only. The two share
+ * each subscriber's own locale. This one answers "what happened in comments",
+ * goes to a fixed operator list, and is English-only. The two share
  * `sendEmail`, `sanitizeForEmail` and the send-budget machinery; nothing else
  * about them is the same shape.
  *
  * Each cron tick:
  *   1. Take pending rows older than DEBOUNCE_MS, so a spam burst coalesces into
  *      one email instead of one per comment.
- *   2. Drop rows a moderator already handled — an approved comment or a deleted
- *      one needs no email — and mark them sent so they never come back.
+ *   2. Drop rows that no longer need attention. Legacy `pending` rows disappear
+ *      after approval; `posted` rows survive approval so every new comment is
+ *      still represented. Deleted comments and reports about them are dropped.
  *   3. Render one digest, send it to every recipient, mark the batch sent.
  *
  * On send failure the rows stay pending and the next tick retries, matching
@@ -110,9 +111,11 @@ const parseRecipients = (raw: string | undefined): string[] => {
  * them about it afterwards is how a notification channel teaches people to
  * ignore it.
  *
- * 'pending' rows survive only while the comment is still pending. 'reported'
- * rows survive unless the comment is gone — a report on a published comment is
- * the whole point of reporting, so `approved` is not a reason to drop it.
+ * 'pending' rows survive only while the comment is still pending. They are kept
+ * for compatibility with rows created before operator mail covered every post.
+ * 'posted' rows survive publication and moderation approval, so enabling the
+ * feature really does cover every new comment. 'reported' rows survive unless
+ * the comment is gone — a report on a published comment is the point of reporting.
  */
 const stillActionable = (row: PendingModeratorNotification): boolean =>
 	row.reason === "pending"
@@ -120,8 +123,37 @@ const stillActionable = (row: PendingModeratorNotification): boolean =>
 		: row.status !== "deleted";
 
 /** Operator-facing label for the reason column. */
-const reasonLabel = (reason: string): string =>
-	reason === "reported" ? "Reported by a reader" : "Held for review";
+const reasonLabel = (row: PendingModeratorNotification): string => {
+	if (row.reason === "reported") return "Reported by a reader";
+	if (row.reason === "posted") {
+		return row.status === "pending"
+			? "New comment — held for review"
+			: "New comment — published";
+	}
+	return "Held for review";
+};
+
+const digestHeading = (items: PendingModeratorNotification[]): string => {
+	const n = items.length;
+	if (items.every((it) => it.reason === "posted")) {
+		return n === 1 ? "1 new comment" : `${n} new comments`;
+	}
+	if (items.every((it) => it.reason !== "posted")) {
+		return n === 1 ? "1 comment needs your review" : `${n} comments need your review`;
+	}
+	return n === 1 ? "1 comment notification" : `${n} comment notifications`;
+};
+
+const digestSubject = (items: PendingModeratorNotification[]): string => {
+	const n = items.length;
+	if (items.every((it) => it.reason === "posted")) {
+		return n === 1 ? "1 new comment" : `${n} new comments`;
+	}
+	if (items.every((it) => it.reason !== "posted")) {
+		return n === 1 ? "1 comment needs review" : `${n} comments need review`;
+	}
+	return n === 1 ? "1 comment notification" : `${n} comment notifications`;
+};
 
 const renderHtml = (params: {
 	adminBase: string;
@@ -132,7 +164,7 @@ const renderHtml = (params: {
 			(it) => `
 <tr><td style="padding:12px 0;border-bottom:1px solid #e5e7eb;">
   <div style="font-size:13px;color:#6b7280;">
-    ${escapeHtml(reasonLabel(it.reason))} · ${escapeHtml(it.author_name ?? "Anonymous")} ·
+    ${escapeHtml(reasonLabel(it))} · ${escapeHtml(it.author_name ?? "Anonymous")} ·
     <a href="${params.adminBase}/admin/comments/${encodeURIComponent(it.comment_id)}">review</a>
   </div>
   <div style="font-size:12px;color:#9ca3af;margin-top:2px;">${escapeHtml(it.post_slug)}</div>
@@ -140,14 +172,12 @@ const renderHtml = (params: {
 </td></tr>`,
 		)
 		.join("");
-	const n = params.items.length;
-	const heading =
-		n === 1 ? "1 comment needs your review" : `${n} comments need your review`;
+	const heading = digestHeading(params.items);
 	return `<!doctype html><html><body style="font-family:system-ui,sans-serif;max-width:560px;margin:auto;padding:24px;color:#111827;">
 <h1 style="font-size:18px;margin:0 0 12px;">${escapeHtml(heading)}</h1>
 <table style="width:100%;border-collapse:collapse;">${rows}</table>
 <p style="margin-top:24px;font-size:12px;color:#6b7280;">
-  <a href="${params.adminBase}/admin/queue" style="color:#6b7280;">Open the moderation queue</a>
+  <a href="${params.adminBase}/admin" style="color:#6b7280;">Open Garrul admin</a>
   · Turn this off under Admin → Settings → Moderation.
 </p>
 </body></html>`;
@@ -201,10 +231,7 @@ export const runModeratorDigest = async (
 	}
 
 	const html = renderHtml({ adminBase: publicBase, items });
-	const subject =
-		items.length === 1
-			? "1 comment needs review"
-			: `${items.length} comments need review`;
+	const subject = digestSubject(items);
 
 	// One reservation for the whole fan-out, not one per recipient.
 	//

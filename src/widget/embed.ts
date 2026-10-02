@@ -73,6 +73,7 @@ import {
 	editWindowState,
 } from "./edit-window";
 import { absoluteTime, isoTime, relativeTime } from "./time";
+import { pageTheme, type WidgetTheme } from "./theme";
 // The mount request and the wire shapes it carries. Kept out of this file so the
 // fallback rule can be tested without a DOM — see boot.ts's header.
 import {
@@ -927,7 +928,11 @@ const mountTurnstileFrame = (
 		"xr-spatial-tracking; accelerometer; gyroscope; magnetometer",
 	);
 	const parentOrigin = encodeURIComponent(window.location.origin);
-	frame.src = `${apiBase}/embed/turnstile-frame?parent_origin=${parentOrigin}`;
+	const rootNode = container.getRootNode();
+	const host = rootNode instanceof ShadowRoot ? rootNode.host : null;
+	const hostTheme = host instanceof HTMLElement ? host.dataset.theme : undefined;
+	const theme = hostTheme === "light" || hostTheme === "dark" ? hostTheme : "auto";
+	frame.src = `${apiBase}/embed/turnstile-frame?parent_origin=${parentOrigin}&theme=${theme}`;
 	container.appendChild(frame);
 
 	const tokenInput = el("input") as HTMLInputElement;
@@ -1455,7 +1460,10 @@ const buildSubscribeBell = (
 	// asking would be a worse experience *and* would let them subscribe an inbox
 	// that isn't theirs. Declared before `send` because `send` hides it on
 	// success.
-	const form = el("form", "gr-subscribe-form");
+	// This control can sit inside the main comment form. Keep its email disclosure
+	// a div rather than a nested <form> — nested forms are invalid HTML and make
+	// Enter/submission ownership browser-dependent.
+	const form = el("div", "gr-subscribe-form");
 	form.hidden = true;
 	const emailInput = el("input") as HTMLInputElement;
 	// Assigned only on the anonymous path: the signed-in bell posts straight from
@@ -1464,8 +1472,8 @@ const buildSubscribeBell = (
 
 	// Disabling the bell alone left the form wide open — the submit button and the
 	// Enter key inside the input both reach `send` without going near the bell. So
-	// disable whichever control is actually live. Disabling the submit button also
-	// suppresses implicit submission, which is what closes the Enter-key path.
+	// disable whichever control is actually live. The Enter-key path is handled
+	// explicitly below because this disclosure is deliberately not a nested form.
 	const setBusy = (busy: boolean): void => {
 		btn.disabled = busy;
 		if (submit) submit.disabled = busy;
@@ -1676,23 +1684,36 @@ const buildSubscribeBell = (
 	};
 
 	if (!managed) {
-		emailInput.className = "gr-email-input";
+		emailInput.className = "gr-subscribe-email";
 		emailInput.type = "email";
-		emailInput.required = true;
+		emailInput.disabled = true;
 		emailInput.placeholder = s("w.email_ph");
 		emailInput.autocomplete = "email";
 		submit = el("button", "gr-subscribe-submit", s("w.subscribe.submit"));
-		submit.type = "submit";
+		submit.type = "button";
 		form.append(emailInput, submit);
 		// Only on this path is the bell a disclosure — managed, it is a toggle and
 		// carries aria-pressed instead. Safe to expose: this says whether the email
 		// field is showing, never whether the reader is subscribed, which is the
 		// one thing the endpoint refuses to reveal.
 		btn.setAttribute("aria-expanded", "false");
-		form.addEventListener("submit", (e) => {
-			e.preventDefault();
+		const submitEmail = (): void => {
+			// Required only for this action. The disclosure can now live inside the
+			// comment form, so leaving it permanently required would make an unopened
+			// subscription field block Post comment's native validation.
+			emailInput.required = true;
+			const valid = emailInput.reportValidity();
+			emailInput.required = false;
+			if (!valid) return;
 			const email = emailInput.value.trim();
 			if (email) void send(email);
+		};
+		submit.addEventListener("click", submitEmail);
+		emailInput.addEventListener("keydown", (e) => {
+			if (e.key !== "Enter") return;
+			e.preventDefault();
+			e.stopPropagation();
+			submitEmail();
 		});
 	}
 
@@ -1711,6 +1732,7 @@ const buildSubscribeBell = (
 			return;
 		}
 		form.hidden = !form.hidden;
+		emailInput.disabled = form.hidden;
 		btn.setAttribute("aria-expanded", String(!form.hidden));
 		if (!form.hidden) emailInput.focus();
 	});
@@ -2892,12 +2914,14 @@ const buildForm = (
 
 	if (staffEligible) form.appendChild(buildStaffToggle());
 
-	const submit = el("button", undefined, s("w.post_comment"));
+	const actions = el("div", "gr-form-actions");
+	const submit = el("button", "gr-submit-btn", s("w.post_comment"));
 	submit.type = "submit";
+	actions.appendChild(submit);
 
 	const errBox = statusBox("gr-error is-inline");
 
-	form.append(submit, errBox);
+	form.append(actions, errBox);
 	return form;
 };
 
@@ -3022,6 +3046,52 @@ const applyDirection = (host: HTMLElement) => {
 };
 
 /**
+ * Mirror a site-controlled theme onto the Shadow DOM host.
+ *
+ * PaperMod stores its choice as data-theme="light|dark" on <html>. Shadow DOM
+ * isolation correctly prevents the site's CSS from leaking into Garrul, but it
+ * also means Garrul cannot see that selector from its own stylesheet. Copying
+ * the state to #garrul lets the existing :host([data-theme]) rules do their job
+ * and observing the source keeps the widget in sync with the site's toggle.
+ *
+ * An explicit data-theme on #garrul remains authoritative and is never
+ * overwritten. When the page exposes no recognizable theme, Garrul leaves the
+ * attribute unset so its existing prefers-color-scheme fallback still applies.
+ */
+const syncPageTheme = (host: HTMLElement): void => {
+	const explicit = host.dataset.theme;
+	if (explicit === "light" || explicit === "dark") return;
+
+	let applied: WidgetTheme | null = null;
+	const sync = (): void => {
+		const next = pageTheme(
+			document.documentElement.dataset.theme,
+			document.body?.classList.contains("dark") ?? false,
+		);
+		if (next) {
+			host.dataset.theme = next;
+			applied = next;
+		} else if (applied) {
+			delete host.dataset.theme;
+			applied = null;
+		}
+	};
+
+	sync();
+	const observer = new MutationObserver(sync);
+	observer.observe(document.documentElement, {
+		attributes: true,
+		attributeFilter: ["data-theme", "class"],
+	});
+	if (document.body) {
+		observer.observe(document.body, {
+			attributes: true,
+			attributeFilter: ["class"],
+		});
+	}
+};
+
+/**
  * Origin of the <script> that loaded this bundle, or null if it can't be
  * determined — the fallback for `data-api` when the host page omits it.
  *
@@ -3060,6 +3130,7 @@ const init = () => {
 	const apiBase = host.dataset.api ?? SCRIPT_ORIGIN ?? window.location.origin;
 
 	applyDirection(host);
+	syncPageTheme(host);
 	// Locale is a property of the site, not of the reader: data-lang is what the
 	// operator chose, <html lang> is what their theme claims. Accept-Language and
 	// navigator.language are deliberately never consulted — a German comment box
@@ -3911,16 +3982,15 @@ const loadOnce = async (
 		wrap.appendChild(el("p", "gr-empty", closedNotice(closedReason)));
 	}
 
-	// Thread toolbar: sort on the left, subscribe bell on the right. This row
-	// used to exist only to hold the sort selector, hence the generalization
-	// rather than a second row — the bell wants exactly this slot, immediately
-	// above the list.
+	// Thread toolbar: sorting lives above the thread. This custom surface keeps
+	// notification opt-in inside the comment form, so no separate subscribe bell
+	// is rendered here.
 	// Chronological order needs no scores, so the selector is no longer gated on
 	// voting — only on there being something to sort. A post with no comments
 	// used to render "Sort by" over "No comments yet" wherever voting was on;
 	// ungating without this check would have spread that to every install.
 	const showSort = data.threads.length > 0;
-	if (showSort || subscriptionsEnabled) {
+	if (showSort) {
 		const bar = el("div", "gr-threadbar");
 		if (showSort) {
 			const sortWrap = el("div", "gr-sort");
@@ -3961,14 +4031,6 @@ const loadOnce = async (
 				reload();
 			});
 			bar.appendChild(sortWrap);
-		}
-		if (subscriptionsEnabled) {
-			// `me?.email`, not `me != null` — a session with no address (X/Twitter,
-			// or an anonymous ghost) cannot drive the stateful bell. See the note on
-			// buildSubscribeBell.
-			bar.appendChild(
-				buildSubscribeBell(apiBase, slug, me?.email ?? null, ctx.seed),
-			);
 		}
 		wrap.appendChild(bar);
 	}
@@ -4142,15 +4204,15 @@ const loadOnce = async (
 		// (buildWritePreview wraps it in div.gr-compose), and focusin covers the
 		// name field, email field, notify checkbox and toolbar too.
 		const onFocusIn = (e: Event): void => {
-			// Never mount from the submit button. It sits directly below the
-			// slot, so growing the slot on mousedown-focus would slide the button
-			// out from under the cursor and swallow the click — the visitor sees
-			// a captcha appear and nothing happen. submit() arms the gate itself
-			// on that path. A plain listener rather than `{ once: true }`,
-			// because an ignored button focus would otherwise consume it; arm()
-			// is idempotent.
-			if (e.target === submitBtn) return;
-			gate.arm();
+		// Never mount from the action row. It sits directly below the slot, so
+		// growing the slot on mousedown-focus would slide Post comment or the bell
+		// out from under the cursor and swallow the click. submit() arms the gate
+		// itself for the primary action; subscriptions do not need it. A plain
+		// listener rather than `{ once: true }` keeps later composer focus able to
+		// arm the idempotent gate.
+		const target = e.target;
+		if (target instanceof Element && target.closest(".gr-form-actions")) return;
+		gate.arm();
 		};
 		form.addEventListener("focusin", onFocusIn);
 

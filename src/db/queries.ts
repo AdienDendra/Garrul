@@ -2629,8 +2629,8 @@ export const updateSubscriptionLastNotified = async (
 		.run();
 };
 
-/** Why a comment is in the moderator queue. See 0021_moderator_notifications.sql. */
-export type ModeratorNotifyReason = "pending" | "reported";
+/** Why a comment is in the operator notification queue. */
+export type ModeratorNotifyReason = "posted" | "pending" | "reported";
 
 /**
  * Queue one moderator notification.

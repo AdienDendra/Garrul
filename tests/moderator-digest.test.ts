@@ -214,6 +214,25 @@ describe("runModeratorDigest — degrades, never fails", () => {
 });
 
 describe("runModeratorDigest — what goes out", () => {
+	it("sends an approved new comment to the operator", async () => {
+		await enqueueModeratorNotification(env.DB, addComment("c1", "approved"), "posted");
+		await runModeratorDigest(env, AFTER_DEBOUNCE);
+
+		expect(sent).toHaveLength(1);
+		expect(sent[0]!.subject).toBe("1 new comment");
+		expect(sent[0]!.html).toContain("New comment — published");
+	});
+
+	it("labels a held new comment without creating a second notice", async () => {
+		await enqueueModeratorNotification(env.DB, addComment("c1", "pending"), "posted");
+		await runModeratorDigest(env, AFTER_DEBOUNCE);
+
+		expect(sent).toHaveLength(1);
+		expect(sent[0]!.subject).toBe("1 new comment");
+		expect(sent[0]!.html).toContain("New comment — held for review");
+		expect(pendingRows()).toHaveLength(1);
+	});
+
 	it("coalesces a burst into one email", async () => {
 		// The property that makes this channel usable during a spam flood: the
 		// queue depth changes the digest's length, not the number of emails.
@@ -299,6 +318,15 @@ describe("runModeratorDigest — what goes out", () => {
 });
 
 describe("runModeratorDigest — rows a moderator already handled", () => {
+	it("keeps a posted notice when a pending comment is approved", async () => {
+		await enqueueModeratorNotification(env.DB, addComment("c1", "pending"), "posted");
+		sqlite.prepare("UPDATE comments SET status = 'approved' WHERE id = 'c1'").run();
+		await runModeratorDigest(env, AFTER_DEBOUNCE);
+
+		expect(sent).toHaveLength(1);
+		expect(sent[0]!.html).toContain("New comment — published");
+	});
+
 	it("drops a comment that was approved inside the debounce window", async () => {
 		await enqueueModeratorNotification(env.DB, addComment("c1", "pending"), "pending");
 		sqlite.prepare("UPDATE comments SET status = 'approved' WHERE id = 'c1'").run();

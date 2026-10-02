@@ -138,8 +138,8 @@ const MOD_FLAG_META: { key: FlagKey; label: string; help: string }[] = [
 	},
 	{
 		key: "moderator_email_enabled",
-		label: "Email me about the queue",
-		help: "Send a digest to ADMIN_EMAILS (or MODERATOR_NOTIFY_EMAILS) when comments land in the queue or get reported. Needs email configured — EMAIL_PROVIDER, RESEND_API_KEY, EMAIL_FROM and PUBLIC_BASE_URL — and stays silent without it.",
+		label: "Email me about every comment",
+		help: "Send a digest to ADMIN_EMAILS (or MODERATOR_NOTIFY_EMAILS) for every new comment, including comments held for review, plus reported comments. Needs EMAIL_PROVIDER, RESEND_API_KEY, EMAIL_FROM and PUBLIC_BASE_URL.",
 	},
 ];
 

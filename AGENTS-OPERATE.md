@@ -239,8 +239,8 @@ between the two is a build error, not a silent misclassification.
 | `REACTIONS_ENABLED` | var | Comment emoji reactions. Defaults **on**; same falsy-spelling semantics. Disabling hides the reaction bar and 403s `POST /api/v1/reactions`. | `true` | `wrangler.toml` |
 | `VOTING_ENABLED` | var | Comment voting (up/down buttons in the widget). Defaults **on** when unset; set `0`/`false`/`no`/`off` to disable instance-wide. | `true` | `wrangler.toml` |
 | `DOWNVOTES_ENABLED` | var | Downvote button. Same defaults-on semantics. Applies to **both** comment votes and page votes (a brigading-mitigation switch); independent of `VOTING_ENABLED`. | `true` | `wrangler.toml` |
-| `MODERATOR_EMAIL_ENABLED` | var | Email `ADMIN_EMAILS` (or `MODERATOR_NOTIFY_EMAILS`) a digest when comments land in the moderation queue or get reported. Defaults **off** — outbound mail is not something an upgrade should start doing unasked. Needs `EMAIL_PROVIDER`, `RESEND_API_KEY`, `EMAIL_FROM` and `PUBLIC_BASE_URL`; without them the pass is a silent no-op. Also settable from `/admin/settings`. | `false` | `wrangler.toml` |
-| `MODERATOR_NOTIFY_EMAILS` | var | Comma-separated recipients for moderation-queue email. Unset falls back to `ADMIN_EMAILS`, which is already the set of people who can act on the queue — set this only when the alerts belong somewhere else, such as a shared `moderation@` alias. | `moderation@example.com` | `wrangler.toml` |
+| `MODERATOR_EMAIL_ENABLED` | var | Email `ADMIN_EMAILS` (or `MODERATOR_NOTIFY_EMAILS`) a digest for every new comment, whether published or held for review, plus reported comments. Defaults **off**. Needs `EMAIL_PROVIDER`, `RESEND_API_KEY`, `EMAIL_FROM` and `PUBLIC_BASE_URL`; without them the pass is a silent no-op. Also settable from `/admin/settings`. | `false` | `wrangler.toml` |
+| `MODERATOR_NOTIFY_EMAILS` | var | Comma-separated recipients for new-comment and moderation email. Unset falls back to `ADMIN_EMAILS`; set this only when alerts belong somewhere else, such as a shared `moderation@` alias. | `moderation@example.com` | `wrangler.toml` |
 | `PAGE_REACTIONS_ENABLED` | var | Article-level emoji reaction bar (react to the page itself, no comment). Defaults **off** so an upgrade never surfaces new UI unasked. Enables `POST /api/v1/page-engagement/reactions` and the widget bar. | `false` | `wrangler.toml` |
 | `PAGE_VOTES_ENABLED` | var | Article-level "was this helpful?" up/down vote tally. Defaults **off**. Enables `POST /api/v1/page-engagement/votes`; downvotes here still honor `DOWNVOTES_ENABLED`. | `false` | `wrangler.toml` |
 | `SHOW_DELETED_PLACEHOLDERS` | var | Keep deleted comments in the public tree as a placeholder (`[deleted]` / `[removed by a moderator]`) instead of pruning leaf deletions. Defaults **off** (current behavior: a deleted comment with live replies is still kept for thread continuity; a deleted leaf is dropped). Added v1.15.0. | `false` | `wrangler.toml` |
@@ -709,18 +709,17 @@ Triggers (events that produce a send):
   (see `src/lib/digest.ts`). Subscriptions are thread-scoped, so a
   subscriber hears about every new comment on the post, not only
   direct replies to their own.
-- **Moderator digest** — a comment lands in the moderation queue, or a
-  reader files the first report on one. Also first-class built-in email,
-  also no webhook required, and the exact inverse of the reply
-  notification: readers hear when a comment is approved, you hear when
-  it isn't, so no comment ever notifies both. Off by default; turn it on
-  with `MODERATOR_EMAIL_ENABLED` or *Settings → Moderation → Email me
-  about the queue*. Recipients default to `ADMIN_EMAILS`;
+- **Operator digest** — every accepted comment, whether published or held
+  for review, plus the first report on a comment. Also first-class built-in
+  email and no webhook required. It is independent of thread-scoped reader
+  subscriptions. Off by default; turn it on with
+  `MODERATOR_EMAIL_ENABLED` or *Settings → Moderation → Email me about
+  every comment*. Recipients default to `ADMIN_EMAILS`;
   `MODERATOR_NOTIFY_EMAILS` overrides for a shared alias. Same
   5-minute debounce (`src/lib/moderator-digest.ts`), capped at 25
   comments per tick, English-only like the admin UI and the bot.
-  Anything you handled inside the debounce window is dropped rather than
-  mailed. Silent no-op if email isn't configured.
+  Approval inside the debounce window keeps the new-comment notice; deletion
+  drops it. Silent no-op if email isn't configured.
 - **Subscription confirmation** — a reader subscribes to a thread
   (double-opt-in). This is the only send an unauthenticated caller can
   trigger, so it has its own ceiling — see below. A signed-in reader
@@ -2317,12 +2316,12 @@ recipients are your subscribers. Log lines are not a safe place for
 that. If the code alone isn't enough to diagnose a delivery problem, the
 Resend dashboard has the full message against the specific send.
 
-**Moderator email never arrives.** Everything above applies first — it
+**Operator email never arrives.** Everything above applies first — it
 uses the same provider and the same cron. Then check the switch: it is
 **off by default** and off *silently*, so an instance whose reader
 digests work fine will still send you nothing until
 `MODERATOR_EMAIL_ENABLED` (or *Settings → Moderation → Email me about
-the queue*) is on. Note the flag gates the **enqueue** as well as the
+every comment*) is on. Note the flag gates the **enqueue** as well as the
 send, so turning it on won't retroactively mail you about a queue that
 built up while it was off. Also confirm `ADMIN_EMAILS` is populated, or
 `MODERATOR_NOTIFY_EMAILS` if you set one — with neither, the pass

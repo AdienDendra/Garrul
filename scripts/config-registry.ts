@@ -716,9 +716,9 @@ export const CONFIG_REGISTRY: ConfigEntry[] = [
 		kind: "var",
 		required: false,
 		group: "Feature flags",
-		hint: "email the operator about the moderation queue; defaults OFF",
+		hint: "email the operator about every new comment; defaults OFF",
 		description:
-			"Email `ADMIN_EMAILS` (or `MODERATOR_NOTIFY_EMAILS`) a digest when comments land in the moderation queue or get reported. Defaults **off** — outbound mail is not something an upgrade should start doing unasked. Needs `EMAIL_PROVIDER`, `RESEND_API_KEY`, `EMAIL_FROM` and `PUBLIC_BASE_URL`; without them the pass is a silent no-op. Also settable from `/admin/settings`.",
+			"Email `ADMIN_EMAILS` (or `MODERATOR_NOTIFY_EMAILS`) a digest for every new comment, whether published or held for review, plus reported comments. Defaults **off**. Needs `EMAIL_PROVIDER`, `RESEND_API_KEY`, `EMAIL_FROM` and `PUBLIC_BASE_URL`; without them the pass is a silent no-op. Also settable from `/admin/settings`.",
 		example: "false",
 		addedIn: "2.9.0",
 	},
@@ -727,9 +727,9 @@ export const CONFIG_REGISTRY: ConfigEntry[] = [
 		kind: "var",
 		required: false,
 		group: "Feature flags",
-		hint: "comma-separated recipients for moderation email; defaults to ADMIN_EMAILS",
+		hint: "comma-separated recipients for operator email; defaults to ADMIN_EMAILS",
 		description:
-			"Comma-separated recipients for moderation-queue email. Unset falls back to `ADMIN_EMAILS`, which is already the set of people who can act on the queue — set this only when the alerts belong somewhere else, such as a shared `moderation@` alias.",
+			"Comma-separated recipients for new-comment and moderation email. Unset falls back to `ADMIN_EMAILS`; set this only when alerts belong somewhere else, such as a shared `moderation@` alias.",
 		example: "moderation@example.com",
 		addedIn: "2.9.0",
 	},

@@ -32,20 +32,21 @@
 	--gr-font-size: var(--garrul-font-size, 15px);
 	--gr-input-bg: var(--garrul-input-bg, #fff);
 	--gr-border: var(--garrul-border, #d0d3d8);
+	--gr-focus: var(--garrul-focus, rgba(17,24,39,.45));
 	--gr-radius: var(--garrul-radius, 6px);
 	--gr-muted: var(--garrul-muted, #6b7280);
-	--gr-accent: var(--garrul-accent, #2563eb);
+	--gr-accent: var(--garrul-accent, #111827);
 	--gr-accent-fg: var(--garrul-accent-fg, #fff);
-	--gr-link: var(--garrul-link, #2563eb);
+	--gr-link: var(--garrul-link, #111827);
 	--gr-error: var(--garrul-error, #b91c1c);
-	--gr-notice: var(--garrul-notice, #1e6091);
-	--gr-badge-bg: var(--garrul-badge-bg, #e0e7ff);
-	--gr-badge-fg: var(--garrul-badge-fg, #1e3a8a);
+	--gr-notice: var(--garrul-notice, #374151);
+	--gr-badge-bg: var(--garrul-badge-bg, #e5e7eb);
+	--gr-badge-fg: var(--garrul-badge-fg, #111827);
 	--gr-skel: var(--garrul-skel, #e7e9ec);
 	/* Additive vars (new in this release; non-breaking). See docs/THEMING.md. */
 	--gr-surface: var(--garrul-surface, #f7f8fa);
 	--gr-hover: var(--garrul-hover, #eef0f3);
-	--gr-accent-hover: var(--garrul-accent-hover, #1d4ed8);
+	--gr-accent-hover: var(--garrul-accent-hover, #000);
 	--gr-vote-active: var(--garrul-vote-active, var(--gr-badge-bg));
 	--gr-shadow: var(--garrul-shadow, 0 1px 2px rgba(0,0,0,.06));
 	/* Duration for every state transition in the widget. Short on purpose:
@@ -70,42 +71,44 @@
 @media (prefers-color-scheme: dark) {
 	:host(:not([data-theme="light"])) {
 		--gr-fg: var(--garrul-fg, #e6e8eb);
-		--gr-bg: var(--garrul-bg, #12161a);
-		--gr-input-bg: var(--garrul-input-bg, #1b1f24);
-		--gr-border: var(--garrul-border, #2e353d);
-		--gr-muted: var(--garrul-muted, #9aa3b0);
-		--gr-accent: var(--garrul-accent, #3b82f6);
-		--gr-accent-fg: var(--garrul-accent-fg, #0b1220);
-		--gr-link: var(--garrul-link, #6aa9ff);
+		--gr-bg: var(--garrul-bg, #1d1e20);
+		--gr-input-bg: var(--garrul-input-bg, #2e2e33);
+		--gr-border: var(--garrul-border, rgba(255,255,255,.14));
+		--gr-focus: var(--garrul-focus, rgba(243,244,246,.45));
+		--gr-muted: var(--garrul-muted, #a8abb2);
+		--gr-accent: var(--garrul-accent, #f3f4f6);
+		--gr-accent-fg: var(--garrul-accent-fg, #111827);
+		--gr-link: var(--garrul-link, #f3f4f6);
 		--gr-error: var(--garrul-error, #f08a8a);
-		--gr-notice: var(--garrul-notice, #6cb6e8);
-		--gr-badge-bg: var(--garrul-badge-bg, #1e2a44);
-		--gr-badge-fg: var(--garrul-badge-fg, #c9d9f5);
-		--gr-skel: var(--garrul-skel, #2a2f36);
-		--gr-surface: var(--garrul-surface, #1b1f24);
-		--gr-hover: var(--garrul-hover, #23282e);
-		--gr-accent-hover: var(--garrul-accent-hover, #2563eb);
+		--gr-notice: var(--garrul-notice, #d1d5db);
+		--gr-badge-bg: var(--garrul-badge-bg, #3a3b41);
+		--gr-badge-fg: var(--garrul-badge-fg, #f3f4f6);
+		--gr-skel: var(--garrul-skel, #3a3b41);
+		--gr-surface: var(--garrul-surface, #25262a);
+		--gr-hover: var(--garrul-hover, #3a3b41);
+		--gr-accent-hover: var(--garrul-accent-hover, #d1d5db);
 		--gr-shadow: var(--garrul-shadow, 0 1px 2px rgba(0,0,0,.5));
 	}
 }
 :host([data-theme="dark"]) {
 	color-scheme: dark;
 	--gr-fg: var(--garrul-fg, #e6e8eb);
-	--gr-bg: var(--garrul-bg, #12161a);
-	--gr-input-bg: var(--garrul-input-bg, #1b1f24);
-	--gr-border: var(--garrul-border, #2e353d);
-	--gr-muted: var(--garrul-muted, #9aa3b0);
-	--gr-accent: var(--garrul-accent, #3b82f6);
-	--gr-accent-fg: var(--garrul-accent-fg, #0b1220);
-	--gr-link: var(--garrul-link, #6aa9ff);
+	--gr-bg: var(--garrul-bg, #1d1e20);
+	--gr-input-bg: var(--garrul-input-bg, #2e2e33);
+	--gr-border: var(--garrul-border, rgba(255,255,255,.14));
+	--gr-focus: var(--garrul-focus, rgba(243,244,246,.45));
+	--gr-muted: var(--garrul-muted, #a8abb2);
+	--gr-accent: var(--garrul-accent, #f3f4f6);
+	--gr-accent-fg: var(--garrul-accent-fg, #111827);
+	--gr-link: var(--garrul-link, #f3f4f6);
 	--gr-error: var(--garrul-error, #f08a8a);
-	--gr-notice: var(--garrul-notice, #6cb6e8);
-	--gr-badge-bg: var(--garrul-badge-bg, #1e2a44);
-	--gr-badge-fg: var(--garrul-badge-fg, #c9d9f5);
-	--gr-skel: var(--garrul-skel, #2a2f36);
-	--gr-surface: var(--garrul-surface, #1b1f24);
-	--gr-hover: var(--garrul-hover, #23282e);
-	--gr-accent-hover: var(--garrul-accent-hover, #2563eb);
+	--gr-notice: var(--garrul-notice, #d1d5db);
+	--gr-badge-bg: var(--garrul-badge-bg, #3a3b41);
+	--gr-badge-fg: var(--garrul-badge-fg, #f3f4f6);
+	--gr-skel: var(--garrul-skel, #3a3b41);
+	--gr-surface: var(--garrul-surface, #25262a);
+	--gr-hover: var(--garrul-hover, #3a3b41);
+	--gr-accent-hover: var(--garrul-accent-hover, #d1d5db);
 	--gr-shadow: var(--garrul-shadow, 0 1px 2px rgba(0,0,0,.5));
 }
 /* The light half of the forced-theme pair. Almost every --gr-* token is
@@ -261,7 +264,7 @@
 }
 
 * { box-sizing: border-box; }
-.gr-root { display: flex; flex-direction: column; gap: 1rem; }
+.gr-root { display: flex; flex-direction: column; gap: 1rem; padding-top: 0.5rem; }
 .gr-form { display: flex; flex-direction: column; gap: 0.5rem; }
 /* Every text field in the widget, whichever form it belongs to. Reply and edit
    composers are .gr-reply-form, not .gr-form, so they have to be named here
@@ -322,10 +325,9 @@
 	align-self: flex-start;
 }
 .gr-tab.gr-tab-active {
-	color: var(--gr-fg);
-	border-color: var(--gr-border);
-	border-bottom-color: var(--gr-input-bg);
-	background: var(--gr-input-bg);
+	color: var(--gr-accent-fg);
+	border-color: var(--gr-accent);
+	background: var(--gr-accent);
 	font-weight: 600;
 }
 .gr-preview {
@@ -354,8 +356,8 @@
 .gr-toolbar-btn:hover { background: var(--gr-hover); border-color: var(--gr-accent); }
 /* One focus ring for every interactive control in the shadow tree, including links. */
 button:focus-visible, textarea:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible {
-	outline: 2px solid var(--gr-accent);
-	outline-offset: 2px;
+	outline: 1px solid var(--gr-focus);
+	outline-offset: 1px;
 }
 /* Motion. There were no transitions anywhere in this file, so every hover,
    vote, sort and collapse snapped between two states. One token drives all of
@@ -406,14 +408,41 @@ button:active:not([disabled]) { opacity: 0.75; }
    explicit dimensions and an iframe is a replaced element, so its box is
    reserved at appendChild rather than at load. */
 .gr-turnstile:empty { display: none; }
+.gr-turnstile:not(:empty) {
+	position: relative;
+	width: 300px;
+	height: 70px;
+}
+/* Turnstile's normal widget is 300x65 and paints its own opaque 1px frame
+   inside a cross-origin iframe, so its border cannot inherit our theme tokens.
+   Clip only that outer pixel, then redraw the frame with Garrul's subdued
+   border. The overlay never handles input; the challenge remains fully
+   interactive underneath it. */
+.gr-turnstile:not(:empty)::after {
+	content: "";
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 300px;
+	height: 65px;
+	border: 1px solid var(--gr-border);
+	pointer-events: none;
+}
 .gr-turnstile-frame {
 	border: 0;
 	width: 300px;
 	height: 70px;
 	display: block;
 	color-scheme: light dark;
+	clip-path: inset(1px 1px 6px 1px);
 }
-.gr-form button {
+.gr-form-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	gap: 0.5rem;
+}
+.gr-form .gr-submit-btn {
 	font: inherit;
 	background: var(--gr-accent);
 	color: var(--gr-accent-fg);
@@ -423,8 +452,8 @@ button:active:not([disabled]) { opacity: 0.75; }
 	cursor: pointer;
 	align-self: flex-start;
 }
-.gr-form button:hover:not([disabled]) { background: var(--gr-accent-hover); }
-.gr-form button[disabled] { opacity: 0.6; cursor: progress; }
+.gr-form .gr-submit-btn:hover:not([disabled]) { background: var(--gr-accent-hover); }
+.gr-form .gr-submit-btn[disabled] { opacity: 0.6; cursor: progress; }
 .gr-error {
 	color: var(--gr-error);
 	font-size: 0.9em;

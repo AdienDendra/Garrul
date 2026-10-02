@@ -79,6 +79,15 @@ describe("widget stylesheet minification", () => {
 		expect(minified).toContain("prefers-color-scheme");
 	});
 
+	it("keeps generic composer buttons out of the primary-action palette", () => {
+		// A broad `.gr-form button` rule also catches tabs and Markdown toolbar
+		// buttons, visually making the inactive tab look active. Only the named
+		// comment-submit control may receive the solid primary treatment.
+		expect(source).not.toMatch(/\.gr-form button\s*\{/);
+		expect(source).toContain(".gr-form .gr-submit-btn");
+		expect(source).toContain(".gr-tab.gr-tab-active");
+	});
+
 	it("actually minifies rather than only stripping comments", () => {
 		expect(minified).not.toContain("/*");
 		// esbuild drops comments even with minify off, so comment-freeness alone

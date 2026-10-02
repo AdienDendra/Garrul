@@ -26,9 +26,10 @@ Or in a stylesheet:
 	--garrul-fg: #f3f4f6;
 	--garrul-bg: #18181b;
 	--garrul-input-bg: #27272a;
-	--garrul-border: #3f3f46;
+	--garrul-border: rgba(255,255,255,.14);
+	--garrul-focus: rgba(243,244,246,.45);
 	--garrul-muted: #a1a1aa;
-	--garrul-accent: #818cf8;
+	--garrul-accent: #f3f4f6;
 }
 ```
 
@@ -39,22 +40,23 @@ Or in a stylesheet:
 | `--garrul-font`           | system UI stack                          | Font family for the whole widget      |
 | `--garrul-font-size`      | `15px`                                   | Base font size                        |
 | `--garrul-fg`             | `#1a1a1a`                                | Primary text color                    |
-| `--garrul-bg`             | `transparent` (auto light); `#12161a` dark; `#fff` pinned light | Widget background                     |
+| `--garrul-bg`             | `transparent` (auto light); `#1d1e20` dark; `#fff` pinned light | Widget background                     |
 | `--garrul-muted`          | `#6b7280`                                | Timestamps, "be the first…" message, the reply collapse toggle (`▸`/`▾`) |
-| `--garrul-border`         | `#d0d3d8`                                | Input borders                         |
+| `--garrul-border`         | `#d0d3d8`; `rgba(255,255,255,.14)` dark | Input and surface borders             |
+| `--garrul-focus`          | `rgba(17,24,39,.45)`; `rgba(243,244,246,.45)` dark | Keyboard focus ring      |
 | `--garrul-radius`         | `6px`                                    | Border-radius on inputs and buttons   |
 | `--garrul-input-bg`       | `#fff`                                   | Input + textarea background           |
-| `--garrul-accent`         | `#2563eb`                                | Submit button background              |
-| `--garrul-accent-fg`      | `#fff`                                   | Submit button text                    |
-| `--garrul-link`           | `#2563eb`                                | Link color in comment bodies, the "Show N more replies" / "Load older comments" buttons |
+| `--garrul-accent`         | `#111827`; `#f3f4f6` dark               | Submit button and active-tab background |
+| `--garrul-accent-fg`      | `#fff`; `#111827` dark                   | Submit button and active-tab text     |
+| `--garrul-link`           | `#111827`; `#f3f4f6` dark               | Link color in comment bodies, the "Show N more replies" / "Load older comments" buttons |
 | `--garrul-error`          | `#b91c1c`                                | Error message color                   |
-| `--garrul-badge-bg`       | `#e0e7ff`                                | Signed-in ("✓ GitHub"), "Pinned" and "Staff" badge background |
-| `--garrul-badge-fg`       | `#1e3a8a`                                | Signed-in ("✓ GitHub"), "Pinned" and "Staff" badge text |
+| `--garrul-badge-bg`       | `#e5e7eb`; `#3a3b41` dark               | Signed-in ("✓ GitHub"), "Pinned" and "Staff" badge background |
+| `--garrul-badge-fg`       | `#111827`; `#f3f4f6` dark               | Signed-in ("✓ GitHub"), "Pinned" and "Staff" badge text |
 | `--garrul-skel`           | `#e7e9ec`                                | Skeleton-loading placeholder color    |
-| `--garrul-notice`         | `#1e6091`                                | Informational notice messages (e.g. a closed thread) |
+| `--garrul-notice`         | `#374151`; `#d1d5db` dark               | Informational notice messages (e.g. a closed thread) |
 | `--garrul-surface`        | `#f7f8fa`                                | Raised surface fill: composer card, error/notice box |
-| `--garrul-hover`          | `#eef0f3`                                | Hover background on toolbar/icon buttons |
-| `--garrul-accent-hover`   | `#1d4ed8`                                | Submit button hover background        |
+| `--garrul-hover`          | `#eef0f3`; `#3a3b41` dark               | Hover background on toolbar/icon buttons |
+| `--garrul-accent-hover`   | `#000`; `#d1d5db` dark                  | Submit button hover background        |
 | `--garrul-vote-active`    | `--garrul-badge-bg`                      | Active vote / reaction highlight (defaults to the badge background) |
 | `--garrul-shadow`         | `0 1px 2px rgba(0,0,0,.06)`              | Box-shadow on raised surfaces         |
 | `--garrul-motion`         | `120ms`                                  | Duration of every hover/press/state transition. Set `0ms` to opt out; a reader's `prefers-reduced-motion` overrides it either way |
@@ -70,7 +72,7 @@ If you want a different look and don't want to pick 21 colors, set
 
 | `data-preset` | Look |
 | ------------- | ---- |
-| absent        | The default palette — blue accent, 6px corners, soft shadow |
+| absent        | The default palette — monochrome accent, 6px corners, soft shadow |
 | `minimal`     | Monochrome. The accent collapses onto the text color, the shadow goes, corners go nearly square. Defined entirely in terms of the other tokens, so it tracks light/dark on its own |
 | `soft`        | Rounded (12px), violet accent, gently tinted surfaces |
 | `contrast`    | Black on white (or the inverse), hard borders, no shadow, near-square corners — every pair clears WCAG AA at body size |
